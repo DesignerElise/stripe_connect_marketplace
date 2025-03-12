@@ -1,0 +1,31 @@
+stripe_connect_marketplace.settings:
+  type: config_object
+  label: 'Stripe Connect Marketplace settings'
+  mapping:
+    stripe_connect:
+      type: mapping
+      label: 'Stripe Connect settings'
+      mapping:
+        environment:
+          type: string
+          label: 'Environment'
+        webhook_secret:
+          type: string
+          label: 'Webhook signing secret'
+        application_fee_percent:
+          type: float
+          label: 'Application fee percentage'
+        payout_schedule:
+          type: string
+          label: 'Default payout schedule'
+        payout_interval:
+          type: string
+          label: 'Default payout interval'
+
+commerce_payment.commerce_payment_gateway.plugin.stripe_connect:
+  type: commerce_payment_gateway_configuration
+  label: 'Stripe Connect payment gateway configuration'
+  mapping:
+    application_fee_percent:
+      type: float
+      label: 'Application fee percentage'

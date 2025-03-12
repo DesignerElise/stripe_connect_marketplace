@@ -1,0 +1,13 @@
+stripe_connect_marketplace.settings:
+  title: 'Stripe Connect Settings'
+  description: 'Configure Stripe Connect integration for your marketplace.'
+  parent: commerce.configuration
+  route_name: stripe_connect_marketplace.settings
+  weight: 10
+
+stripe_connect_marketplace.admin_dashboard:
+  title: 'Stripe Connect Dashboard'
+  description: 'View and manage your Stripe Connect vendors and transactions.'
+  parent: commerce.admin_commerce
+  route_name: stripe_connect_marketplace.admin_dashboard
+  weight: 20

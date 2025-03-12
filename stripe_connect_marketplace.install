@@ -1,0 +1,361 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Stripe Connect Marketplace module.
+ */
+
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\Core\Field\BaseFieldDefinition;
+
+/**
+ * Implements hook_requirements().
+ */
+function stripe_connect_marketplace_requirements($phase) {
+  $requirements = [];
+
+  if ($phase == 'install' || $phase == 'runtime') {
+    // Check for Commerce Stripe module.
+    if (!\Drupal::moduleHandler()->moduleExists('commerce_stripe')) {
+      $requirements['stripe_connect_marketplace_commerce_stripe'] = [
+        'title' => t('Commerce Stripe'),
+        'description' => t('Stripe Connect Marketplace requires the Commerce Stripe module to be installed and enabled.'),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+
+    // Check for Commerce module.
+    if (!\Drupal::moduleHandler()->moduleExists('commerce')) {
+      $requirements['stripe_connect_marketplace_commerce'] = [
+        'title' => t('Commerce'),
+        'description' => t('Stripe Connect Marketplace requires the Commerce module to be installed and enabled.'),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+
+    // Check for required PHP extensions.
+    $required_extensions = ['json', 'curl'];
+    foreach ($required_extensions as $extension) {
+      if (!extension_loaded($extension)) {
+        $requirements['stripe_connect_marketplace_' . $extension] = [
+          'title' => t('PHP @extension extension', ['@extension' => $extension]),
+          'description' => t('Stripe Connect Marketplace requires the PHP @extension extension to be installed.', ['@extension' => $extension]),
+          'severity' => REQUIREMENT_ERROR,
+        ];
+      }
+    }
+
+    // Check PHP version, Stripe requires PHP 7.4+.
+    if (version_compare(PHP_VERSION, '7.4.0', '<')) {
+      $requirements['stripe_connect_marketplace_php_version'] = [
+        'title' => t('PHP version'),
+        'description' => t('Stripe Connect Marketplace requires PHP 7.4.0 or higher. Your current PHP version is @version.', ['@version' => PHP_VERSION]),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+
+    // Check if Stripe API credentials are configured at runtime.
+    if ($phase == 'runtime') {
+      // Check Commerce Stripe settings.
+      $config = \Drupal::config('commerce_stripe.settings');
+      if (empty($config->get('secret_key')) || empty($config->get('publishable_key'))) {
+        $requirements['stripe_connect_marketplace_api_keys'] = [
+          'title' => t('Stripe API credentials'),
+          'description' => t('The Stripe API credentials are not configured. <a href=":url">Configure Commerce Stripe settings</a>.', [':url' => '/admin/commerce/config/stripe']),
+          'severity' => REQUIREMENT_WARNING,
+        ];
+      }
+
+      // Check Stripe Connect specific settings.
+      $connect_config = \Drupal::config('stripe_connect_marketplace.settings');
+      if (empty($connect_config->get('stripe_connect.webhook_secret'))) {
+        $requirements['stripe_connect_marketplace_webhook'] = [
+          'title' => t('Stripe Connect webhook'),
+          'description' => t('The Stripe Connect webhook secret is not configured. <a href=":url">Configure Stripe Connect settings</a>.', [':url' => '/admin/commerce/config/stripe-connect']),
+          'severity' => REQUIREMENT_WARNING,
+        ];
+      }
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_install().
+ */
+function stripe_connect_marketplace_install() {
+  // Create the Stripe account ID field for users.
+  _stripe_connect_marketplace_create_account_id_field();
+  // Create the vendor status field for users.
+  _stripe_connect_marketplace_create_vendor_status_field();
+  // Add the vendor role.
+  _stripe_connect_marketplace_add_vendor_role();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function stripe_connect_marketplace_uninstall() {
+  // Delete the Stripe account ID field.
+  $field_storage = FieldStorageConfig::loadByName('user', 'field_stripe_account_id');
+  if ($field_storage) {
+    $field_storage->delete();
+  }
+  
+  // Delete the vendor status field.
+  $field_storage = FieldStorageConfig::loadByName('user', 'field_vendor_status');
+  if ($field_storage) {
+    $field_storage->delete();
+  }
+  
+  // Remove configurations.
+  \Drupal::configFactory()->getEditable('stripe_connect_marketplace.settings')->delete();
+}
+
+/**
+ * Creates the Stripe account ID field for users.
+ */
+function _stripe_connect_marketplace_create_account_id_field() {
+  // Check if the field already exists.
+  $field_storage = FieldStorageConfig::loadByName('user', 'field_stripe_account_id');
+  if (!$field_storage) {
+    // Create the field storage.
+    $field_storage = FieldStorageConfig::create([
+      'field_name' => 'field_stripe_account_id',
+      'entity_type' => 'user',
+      'type' => 'string',
+      'settings' => [
+        'max_length' => 255,
+        'is_ascii' => TRUE,
+        'case_sensitive' => FALSE,
+      ],
+      'cardinality' => 1,
+      'locked' => FALSE,
+      'module' => 'stripe_connect_marketplace',
+    ]);
+    $field_storage->save();
+    
+    // Create the field instance.
+    $field = FieldConfig::create([
+      'field_storage' => $field_storage,
+      'bundle' => 'user',
+      'label' => t('Stripe Account ID'),
+      'description' => t('The Stripe Connect account ID for this vendor.'),
+      'required' => FALSE,
+      'settings' => [],
+    ]);
+    $field->save();
+    
+    // Set the form display.
+    $form_display = \Drupal::service('entity_display.repository')->getFormDisplay('user', 'user', 'default');
+    $form_display->setComponent('field_stripe_account_id', [
+      'type' => 'string_textfield',
+      'weight' => 10,
+      'settings' => [
+        'size' => 60,
+        'placeholder' => '',
+      ],
+    ]);
+    $form_display->save();
+    
+    // Set the view display.
+    $view_display = \Drupal::service('entity_display.repository')->getViewDisplay('user', 'user', 'default');
+    $view_display->setComponent('field_stripe_account_id', [
+      'type' => 'string',
+      'weight' => 10,
+      'label' => 'above',
+      'settings' => [
+        'link_to_entity' => FALSE,
+      ],
+    ]);
+    $view_display->save();
+  }
+}
+
+/**
+ * Creates the vendor status field for users.
+ */
+function _stripe_connect_marketplace_create_vendor_status_field() {
+  // Check if the field already exists.
+  $field_storage = FieldStorageConfig::loadByName('user', 'field_vendor_status');
+  if (!$field_storage) {
+    // Create the field storage.
+    $field_storage = FieldStorageConfig::create([
+      'field_name' => 'field_vendor_status',
+      'entity_type' => 'user',
+      'type' => 'list_string',
+      'settings' => [
+        'allowed_values' => [
+          'pending' => 'Pending',
+          'active' => 'Active',
+          'inactive' => 'Inactive',
+          'suspended' => 'Suspended',
+        ],
+      ],
+      'cardinality' => 1,
+      'locked' => FALSE,
+      'module' => 'stripe_connect_marketplace',
+    ]);
+    $field_storage->save();
+    
+    // Create the field instance.
+    $field = FieldConfig::create([
+      'field_storage' => $field_storage,
+      'bundle' => 'user',
+      'label' => t('Vendor Status'),
+      'description' => t('The status of this vendor account.'),
+      'required' => FALSE,
+      'default_value' => [
+        [
+          'value' => 'pending',
+        ],
+      ],
+    ]);
+    $field->save();
+    
+    // Set the form display.
+    $form_display = \Drupal::service('entity_display.repository')->getFormDisplay('user', 'user', 'default');
+    $form_display->setComponent('field_vendor_status', [
+      'type' => 'options_select',
+      'weight' => 11,
+    ]);
+    $form_display->save();
+    
+    // Set the view display.
+    $view_display = \Drupal::service('entity_display.repository')->getViewDisplay('user', 'user', 'default');
+    $view_display->setComponent('field_vendor_status', [
+      'type' => 'list_default',
+      'weight' => 11,
+      'label' => 'above',
+    ]);
+    $view_display->save();
+  }
+}
+
+/**
+ * Adds the vendor role.
+ */
+function _stripe_connect_marketplace_add_vendor_role() {
+  $roles = \Drupal::entityTypeManager()->getStorage('user_role')->loadMultiple();
+  if (!isset($roles['vendor'])) {
+    $role = \Drupal::entityTypeManager()->getStorage('user_role')->create([
+      'id' => 'vendor',
+      'label' => 'Vendor',
+      'weight' => 3,
+    ]);
+    $role->save();
+    
+    // Grant necessary permissions to the vendor role.
+    user_role_grant_permissions($role->id(), [
+      'access content',
+      'view own commerce_payment_method',
+      'create commerce_payment_method',
+      'update own commerce_payment_method',
+      'delete own commerce_payment_method',
+    ]);
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function stripe_connect_marketplace_schema() {
+  $schema = [];
+  
+  // In a real-world scenario, you might want to create custom tables
+  // for tracking specific vendor-related data or transaction history.
+  // This is just a placeholder for demonstration purposes.
+  
+  $schema['stripe_connect_transaction_log'] = [
+    'description' => 'Stores logs of Stripe Connect transactions.',
+    'fields' => [
+      'id' => [
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique transaction log ID.',
+      ],
+      'stripe_transaction_id' => [
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The Stripe transaction ID.',
+      ],
+      'vendor_id' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The vendor user ID.',
+      ],
+      'order_id' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => NULL,
+        'description' => 'The commerce order ID if applicable.',
+      ],
+      'amount' => [
+        'type' => 'numeric',
+        'precision' => 10,
+        'scale' => 2,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The transaction amount.',
+      ],
+      'fee_amount' => [
+        'type' => 'numeric',
+        'precision' => 10,
+        'scale' => 2,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The platform fee amount.',
+      ],
+      'currency' => [
+        'type' => 'varchar',
+        'length' => 3,
+        'not null' => TRUE,
+        'default' => 'USD',
+        'description' => 'The currency code.',
+      ],
+      'type' => [
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The transaction type (payment, refund, payout, etc.).',
+      ],
+      'status' => [
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The transaction status.',
+      ],
+      'created' => [
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The Unix timestamp when the transaction was created.',
+      ],
+      'data' => [
+        'type' => 'blob',
+        'size' => 'big',
+        'not null' => FALSE,
+        'description' => 'Serialized data containing additional transaction details.',
+      ],
+    ],
+    'primary key' => ['id'],
+    'indexes' => [
+      'stripe_transaction_id' => ['stripe_transaction_id'],
+      'vendor_id' => ['vendor_id'],
+      'order_id' => ['order_id'],
+      'created' => ['created'],
+    ],
+  ];
+  
+  return $schema;
+}

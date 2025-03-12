@@ -1,0 +1,24 @@
+cat > .gitignore << EOL
+# Ignore vendor directory
+/vendor/
+
+# Ignore composer lock file
+composer.lock
+
+# Ignore any local configuration or environment files
+.env
+
+# Ignore IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore MacOS system files
+.DS_Store
+
+# Ignore Drupal core and contrib files (if accidentally included)
+/web/core/
+/web/modules/contrib/
+/web/themes/contrib/
+EOL

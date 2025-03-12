@@ -1,0 +1,18 @@
+<div class="stripe-connect-vendor-terms">
+    <h1>{{ 'Vendor Terms and Conditions for ' ~ marketplace_name }}</h1>
+    
+    <p>{{ stripe_connect_description }}</p>
+    
+    <h2>Key Terms</h2>
+    <ul>
+      {% for term in key_terms %}
+        <li>{{ term }}</li>
+      {% endfor %}
+    </ul>
+    
+    <h2>Payouts</h2>
+    <p>{{ payout_description }}</p>
+    
+    <h2>Liability</h2>
+    <p>{{ liability_disclaimer }}</p>
+  </div>

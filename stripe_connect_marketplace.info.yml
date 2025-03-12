@@ -1,0 +1,12 @@
+name: 'Stripe Connect Marketplace'
+type: module
+description: 'Enables Stripe Connect integration for Drupal Commerce multi-vendor marketplace.'
+core_version_requirement: ^10 || ^11
+package: Commerce
+configure: stripe_connect_marketplace.settings
+dependencies:
+  - drupal:commerce
+  - drupal:commerce_payment
+  - drupal:commerce_order
+  - commerce_stripe:commerce_stripe
+  - drupal:config

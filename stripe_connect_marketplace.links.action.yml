@@ -1,0 +1,5 @@
+stripe_connect_marketplace.add_vendor:
+  route_name: stripe_connect_marketplace.vendor_form
+  title: 'Add Vendor'
+  appears_on:
+    - stripe_connect_marketplace.admin_dashboard

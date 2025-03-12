@@ -1,0 +1,16 @@
+{
+    "name": "designerelise/stripe_connect_marketplace",
+    "description": "Stripe Connect integration for Drupal Commerce multi-vendor marketplace",
+    "type": "drupal-module",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "drupal/commerce": "^2.30 || ^3.0",
+        "drupal/commerce_stripe": "^1.0",
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

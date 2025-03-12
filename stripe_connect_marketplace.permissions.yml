@@ -1,0 +1,21 @@
+administer stripe connect:
+  title: 'Administer Stripe Connect'
+  description: 'Allow users to configure Stripe Connect settings and manage vendors.'
+  restrict access: true
+
+access stripe connect admin:
+  title: 'Access Stripe Connect administration'
+  description: 'Allow users to access the Stripe Connect administration pages.'
+  restrict access: true
+
+view stripe connect dashboard:
+  title: 'View Stripe Connect dashboard'
+  description: 'Allow vendors to view their Stripe Connect dashboard.'
+
+register as stripe connect vendor:
+  title: 'Register as Stripe Connect vendor'
+  description: 'Allow users to register as Stripe Connect vendors.'
+
+view stripe connect reports:
+  title: 'View Stripe Connect reports'
+  description: 'Allow users to view Stripe Connect reports and analytics.'

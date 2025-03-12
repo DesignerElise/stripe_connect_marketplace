@@ -1,0 +1,57 @@
+<div class="stripe-connect-vendor-details">
+    <h1>Vendor Details: {{ vendor.name }}</h1>
+    
+    <section class="vendor-info">
+      <h2>Vendor Information</h2>
+      <p>Name: {{ vendor.name }}</p>
+      <p>Email: {{ vendor.email }}</p>
+    </section>
+    
+    <section class="account-details">
+      <h2>Stripe Account</h2>
+      <p>Account ID: {{ account.id }}</p>
+      <p>Type: {{ account.type }}</p>
+      <p>Charges Enabled: {{ account.charges_enabled ? 'Yes' : 'No' }}</p>
+      <p>Payouts Enabled: {{ account.payouts_enabled ? 'Yes' : 'No' }}</p>
+      <p>Details Submitted: {{ account.details_submitted ? 'Yes' : 'No' }}</p>
+    </section>
+    
+    <section class="balance">
+      <h2>Balance</h2>
+      <h3>Available Balance</h3>
+      <ul>
+        {% for balance in balance.available %}
+          <li>{{ balance.amount }} {{ balance.currency }}</li>
+        {% endfor %}
+      </ul>
+      
+      <h3>Pending Balance</h3>
+      <ul>
+        {% for balance in balance.pending %}
+          <li>{{ balance.amount }} {{ balance.currency }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    
+    <section class="recent-payouts">
+      <h2>Recent Payouts</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Amount</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payout in payouts %}
+            <tr>
+              <td>{{ payout.created|date('Y-m-d H:i:s') }}</td>
+              <td>{{ payout.amount / 100 }} {{ payout.currency|upper }}</td>
+              <td>{{ payout.status }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>

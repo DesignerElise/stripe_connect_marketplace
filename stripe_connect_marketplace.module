@@ -1,0 +1,148 @@
+<?php
+
+/**
+ * @file
+ * Contains stripe_connect_marketplace.module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Url;
+use Drupal\Core\Entity\EntityInterface;
+
+/**
+ * Implements hook_help().
+ */
+function stripe_connect_marketplace_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    case 'help.page.stripe_connect_marketplace':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('The Stripe Connect Marketplace module integrates Drupal Commerce with Stripe Connect to create a multi-vendor marketplace.') . '</p>';
+      $output .= '<p>' . t('Configuration:') . '</p>';
+      $output .= '<ul>';
+      $output .= '<li>' . t('<a href=":settings">Configure Stripe Connect settings</a>', [':settings' => Url::fromRoute('stripe_connect_marketplace.settings')->toString()]) . '</li>';
+      $output .= '<li>' . t('<a href=":dashboard">View Stripe Connect dashboard</a>', [':dashboard' => Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString()]) . '</li>';
+      $output .= '</ul>';
+      return $output;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function stripe_connect_marketplace_theme($existing, $type, $theme, $path) {
+  return [
+    'stripe_connect_admin_dashboard' => [
+      'variables' => [
+        'vendors' => NULL,
+        'balance' => NULL,
+        'payouts' => NULL,
+        'environment' => NULL,
+      ],
+      'template' => 'stripe-connect-admin-dashboard',
+    ],
+    'stripe_connect_onboarding_complete' => [
+      'variables' => [
+        'account' => NULL,
+        'user' => NULL,
+      ],
+      'template' => 'stripe-connect-onboarding-complete',
+    ],
+    'stripe_connect_vendor_dashboard' => [
+      'variables' => [
+        'account' => NULL,
+        'balance' => NULL,
+        'payouts' => NULL,
+        'user' => NULL,
+      ],
+      'template' => 'stripe-connect-vendor-dashboard',
+    ],
+    'stripe_connect_vendor_details' => [
+      'variables' => [
+        'vendor' => [],
+        'account' => [],
+        'balance' => [],
+        'payouts' => [],
+      ],
+      'template' => 'stripe-connect-vendor-details',
+    ],
+    'stripe_connect_vendor_payouts' => [
+      'variables' => [
+        'vendor' => [],
+        'payouts' => [],
+      ],
+      'template' => 'stripe-connect-vendor-payouts',
+    ],
+    'stripe_connect_vendor_terms' => [
+      'variables' => [
+        'terms' => [],
+      ],
+      'template' => 'stripe-connect-vendor-terms',
+    ],
+  ];
+}
+
+/**
+ * Implements hook_entity_operation().
+ */
+function stripe_connect_marketplace_entity_operation(EntityInterface $entity) {
+  $operations = [];
+  
+  // Add operations for user entities that are vendors
+  if ($entity->getEntityTypeId() === 'user' && 
+      $entity->hasField('field_stripe_account_id') && 
+      !$entity->get('field_stripe_account_id')->isEmpty()) {
+    
+    $operations['stripe_connect'] = [
+      'title' => t('Stripe Connect'),
+      'weight' => 50,
+      'url' => Url::fromRoute('stripe_connect_marketplace.view_vendor', ['user' => $entity->id()]),
+    ];
+  }
+  
+  return $operations;
+}
+
+/**
+ * Implements hook_toolbar().
+ */
+function stripe_connect_marketplace_toolbar() {
+  $items = [];
+  
+  // Check for vendor role if this is the front-end
+  $current_user = \Drupal::currentUser();
+  if ($current_user->hasPermission('view stripe connect dashboard')) {
+    $items['stripe_connect_vendor'] = [
+      '#type' => 'toolbar_item',
+      '#weight' => 999,
+      'tab' => [
+        '#type' => 'link',
+        '#title' => t('Vendor Dashboard'),
+        '#url' => Url::fromRoute('stripe_connect_marketplace.vendor_dashboard'),
+        '#attributes' => [
+          'title' => t('Stripe Connect Vendor Dashboard'),
+          'class' => ['toolbar-icon', 'toolbar-icon-stripe-connect-vendor'],
+        ],
+      ],
+    ];
+  }
+  
+  // Check for admin role
+  if ($current_user->hasPermission('access stripe connect admin')) {
+    $items['stripe_connect_admin'] = [
+      '#type' => 'toolbar_item',
+      '#weight' => 999,
+      'tab' => [
+        '#type' => 'link',
+        '#title' => t('Stripe Connect Admin'),
+        '#url' => Url::fromRoute('stripe_connect_marketplace.admin_dashboard'),
+        '#attributes' => [
+          'title' => t('Stripe Connect Admin Dashboard'),
+          'class' => ['toolbar-icon', 'toolbar-icon-stripe-connect-admin'],
+        ],
+      ],
+    ];
+  }
+  
+  return $items;
+}

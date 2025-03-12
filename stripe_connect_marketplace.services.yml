@@ -1,0 +1,23 @@
+services:
+  stripe_connect_marketplace.api:
+    class: Drupal\stripe_connect_marketplace\StripeApiService
+    arguments:
+      - '@config.factory'
+      - '@logger.factory'
+
+  stripe_connect_marketplace.payment_service:
+    class: Drupal\stripe_connect_marketplace\Service\PaymentService
+    arguments:
+      - '@config.factory'
+      - '@logger.factory'
+      - '@entity_type.manager'
+      - '@stripe_connect_marketplace.api'
+  
+  stripe_connect_marketplace.payout_service:
+    class: Drupal\stripe_connect_marketplace\Service\PayoutService
+    arguments:
+      - '@config.factory'
+      - '@logger.factory'
+      - '@entity_type.manager'
+      - '@state'
+      - '@stripe_connect_marketplace.api'

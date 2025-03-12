@@ -1,0 +1,26 @@
+admin_settings:
+  version: 1.x
+  js:
+    js/stripe_connect_admin.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/jquery.once
+    - core/drupalSettings
+
+stripe_js:
+  version: 1.x
+  js:
+    https://js.stripe.com/v3/: { type: external, minified: true }
+    js/stripe_connect_elements.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/jquery.once
+    - core/drupalSettings
+
+vendor_terms:
+  version: 1.x
+  css:
+    theme:
+      css/vendor-terms.css: {}

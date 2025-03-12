@@ -1,0 +1,11 @@
+stripe_connect_marketplace.admin_dashboard:
+  route_name: stripe_connect_marketplace.admin_dashboard
+  title: 'Dashboard'
+  base_route: stripe_connect_marketplace.admin_dashboard
+  weight: 0
+
+stripe_connect_marketplace.settings:
+  route_name: stripe_connect_marketplace.settings
+  title: 'Settings'
+  base_route: stripe_connect_marketplace.admin_dashboard
+  weight: 10

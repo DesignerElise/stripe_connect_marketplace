@@ -1,0 +1,10 @@
+stripe_connect:
+  environment: test
+  test_secret_key: ''
+  test_publishable_key: ''
+  live_secret_key: ''
+  live_publishable_key: ''
+  webhook_secret: ''
+  application_fee_percent: 10
+  payout_schedule: 'automatic'
+  payout_interval: 'daily'
