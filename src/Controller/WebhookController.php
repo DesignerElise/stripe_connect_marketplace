@@ -224,9 +224,185 @@ class WebhookController extends ControllerBase {
     }
   }
 
-  // Other methods like handlePaymentIntentFailed, handleChargeRefunded, 
-  // handlePayoutEvent, and handleAccountUpdated would be added here similar 
-  // to the implementation of handlePaymentIntentSucceeded
+  /**
+   * Handles payment_intent.payment_failed events.
+   *
+   * @param \Stripe\PaymentIntent $payment_intent
+   *   The payment intent object.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The response object.
+   */
+  protected function handlePaymentIntentFailed(\Stripe\PaymentIntent $payment_intent) {
+    try {
+      // Check if this payment is related to an order
+      if (!isset($payment_intent->metadata->order_id)) {
+        $this->logger->info('No order ID in payment intent metadata');
+        return new Response('No action taken', 200);
+      }
+      
+      $order_id = $payment_intent->metadata->order_id;
+      
+      // Load the order
+      $order = Order::load($order_id);
+      if (!$order) {
+        $this->logger->warning('Order not found: @order_id', ['@order_id' => $order_id]);
+        return new Response('Order not found', 200);
+      }
+      
+      // Log payment failure
+      $this->logger->warning('Payment failed for order @order_id: @error', [
+        '@order_id' => $order_id,
+        '@error' => $payment_intent->last_payment_error ? $payment_intent->last_payment_error->message : 'Unknown error',
+      ]);
+      
+      return new Response('Payment failure recorded', 200);
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error processing payment_intent.payment_failed: @message', ['@message' => $e->getMessage()]);
+      return new Response('Processing error', 500);
+    }
+  }
+
+  /**
+   * Handles charge.refunded events.
+   *
+   * @param \Stripe\Charge $charge
+   *   The charge object.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The response object.
+   */
+  protected function handleChargeRefunded(\Stripe\Charge $charge) {
+    try {
+      // Check if this charge is related to an order
+      if (!isset($charge->metadata->order_id)) {
+        $this->logger->info('No order ID in charge metadata');
+        return new Response('No action taken', 200);
+      }
+      
+      $order_id = $charge->metadata->order_id;
+      
+      // Load the order
+      $order = Order::load($order_id);
+      if (!$order) {
+        $this->logger->warning('Order not found: @order_id', ['@order_id' => $order_id]);
+        return new Response('Order not found', 200);
+      }
+      
+      // Log refund
+      $this->logger->info('Charge refunded for order @order_id: @amount', [
+        '@order_id' => $order_id,
+        '@amount' => $charge->amount_refunded / 100,
+      ]);
+      
+      return new Response('Refund recorded', 200);
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error processing charge.refunded: @message', ['@message' => $e->getMessage()]);
+      return new Response('Processing error', 500);
+    }
+  }
+
+  /**
+   * Handles payout events.
+   *
+   * @param \Stripe\Payout $payout
+   *   The payout object.
+   * @param string $event_type
+   *   The event type.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The response object.
+   */
+  protected function handlePayoutEvent(\Stripe\Payout $payout, $event_type) {
+    try {
+      // Check if this is a connected account payout
+      $account_id = $payout->destination;
+      if (empty($account_id)) {
+        $this->logger->info('No destination account in payout data');
+        return new Response('No action taken', 200);
+      }
+      
+      // Find the vendor user
+      $vendor_id = $this->getVendorIdFromStripeAccount($account_id);
+      if (!$vendor_id) {
+        $this->logger->warning('Vendor not found for Stripe account: @account_id', ['@account_id' => $account_id]);
+        return new Response('Vendor not found', 200);
+      }
+      
+      // Track the payout
+      $this->payoutService->trackPayout($payout, $account_id, $vendor_id);
+      
+      // Log the event
+      $this->logger->info('@event for vendor @vendor_id: @amount', [
+        '@event' => $event_type,
+        '@vendor_id' => $vendor_id,
+        '@amount' => $payout->amount / 100,
+      ]);
+      
+      return new Response('Payout event processed', 200);
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error processing payout event: @message', ['@message' => $e->getMessage()]);
+      return new Response('Processing error', 500);
+    }
+  }
+
+  /**
+   * Handles account.updated events.
+   *
+   * @param \Stripe\Account $account
+   *   The account object.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The response object.
+   */
+  protected function handleAccountUpdated(\Stripe\Account $account) {
+    try {
+      // Find the vendor user
+      $vendor_id = $this->getVendorIdFromStripeAccount($account->id);
+      if (!$vendor_id) {
+        $this->logger->warning('Vendor not found for Stripe account: @account_id', ['@account_id' => $account->id]);
+        return new Response('Vendor not found', 200);
+      }
+      
+      // Load the vendor user
+      $vendor = $this->entityTypeManager->getStorage('user')->load($vendor_id);
+      
+      // Update vendor status based on account details
+      if ($vendor->hasField('field_vendor_status')) {
+        $current_status = $vendor->get('field_vendor_status')->value;
+        $new_status = $current_status;
+        
+        // Update status based on charges_enabled and payouts_enabled
+        if ($account->charges_enabled && $account->payouts_enabled && $account->details_submitted) {
+          $new_status = 'active';
+        }
+        elseif (!$account->details_submitted) {
+          $new_status = 'pending';
+        }
+        
+        // Only update if status changed
+        if ($new_status !== $current_status) {
+          $vendor->set('field_vendor_status', $new_status);
+          $vendor->save();
+          
+          $this->logger->info('Vendor @vendor_id status updated from @old to @new', [
+            '@vendor_id' => $vendor_id,
+            '@old' => $current_status,
+            '@new' => $new_status,
+          ]);
+        }
+      }
+      
+      return new Response('Account update processed', 200);
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error processing account.updated: @message', ['@message' => $e->getMessage()]);
+      return new Response('Processing error', 500);
+    }
+  }
 
   /**
    * Gets the vendor user ID from a Stripe account ID.

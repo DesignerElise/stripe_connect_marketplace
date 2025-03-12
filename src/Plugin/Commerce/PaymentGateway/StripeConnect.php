@@ -34,6 +34,13 @@ use Drupal\commerce_price\Price;
 class StripeConnect extends Stripe {
 
   /**
+   * The Stripe API service.
+   *
+   * @var \Drupal\stripe_connect_marketplace\StripeApiService
+   */
+  protected $stripeApi;
+
+  /**
    * The logger.
    *
    * @var \Drupal\Core\Logger\LoggerChannelInterface
@@ -64,11 +71,12 @@ class StripeConnect extends Stripe {
     $plugin_definition,
     EntityTypeManagerInterface $entity_type_manager,
     TimeInterface $time,
-    StripeApiInterface $stripe_api,
+    StripeApiService $stripe_api,
     LoggerChannelFactoryInterface $logger_factory
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $time, $stripe_api);
     $this->logger = $logger_factory->get('stripe_connect_marketplace');
+    $this->stripeApi = $stripe_api;
   }
 
   /**
@@ -311,7 +319,7 @@ class StripeConnect extends Stripe {
       
       $intent = $this->stripeApi->retrieve('PaymentIntent', $remote_id);
       $intent = $this->stripeApi->getClient()->paymentIntents->capture($remote_id, [
-        'amount_to_capture' => $this->minorUnits($payment_amount->getCurrencyCode(), $amount_decimal),
+        'amount_to_capture' => $this->minorUnits($amount->getCurrencyCode(), $amount_decimal),
       ]);
       
       if ($intent->status === 'succeeded') {

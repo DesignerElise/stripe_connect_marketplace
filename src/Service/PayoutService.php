@@ -7,6 +7,7 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\Core\Datetime\DrupalDateTime;
+use Drupal\stripe_connect_marketplace\StripeApiService;
 
 /**
  * Service for handling Stripe Connect payouts.
@@ -42,6 +43,13 @@ class PayoutService {
   protected $state;
 
   /**
+   * The Stripe API service.
+   *
+   * @var \Drupal\stripe_connect_marketplace\StripeApiService
+   */
+  protected $stripeApi;
+
+  /**
    * Constructs a new PayoutService object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -52,34 +60,21 @@ class PayoutService {
    *   The entity type manager.
    * @param \Drupal\Core\State\StateInterface $state
    *   The state service.
+   * @param \Drupal\stripe_connect_marketplace\StripeApiService $stripe_api
+   *   The Stripe API service.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
     LoggerChannelFactoryInterface $logger_factory,
     EntityTypeManagerInterface $entity_type_manager,
-    StateInterface $state
+    StateInterface $state,
+    StripeApiService $stripe_api
   ) {
     $this->configFactory = $config_factory;
     $this->logger = $logger_factory->get('stripe_connect_marketplace');
     $this->entityTypeManager = $entity_type_manager;
     $this->state = $state;
-  }
-
-  /**
-   * Initializes the Stripe API with the appropriate key.
-   */
-  protected function initStripeApi() {
-    $config = $this->configFactory->get('stripe_connect_marketplace.settings');
-    $environment = $config->get('stripe_connect.environment');
-    $secret_key = $environment == 'live' 
-      ? $config->get('stripe_connect.live_secret_key') 
-      : $config->get('stripe_connect.test_secret_key');
-    
-    if (empty($secret_key)) {
-      throw new \Exception('Stripe API key is not configured.');
-    }
-
-    \Stripe\Stripe::setApiKey($secret_key);
+    $this->stripeApi = $stripe_api;
   }
 
   /**
@@ -99,8 +94,6 @@ class PayoutService {
    */
   public function getVendorPayouts($account_id, $limit = 10, $starting_after = NULL) {
     try {
-      $this->initStripeApi();
-      
       $params = [
         'limit' => $limit,
         'expand' => ['data.destination'],
@@ -111,7 +104,7 @@ class PayoutService {
       }
       
       // For connected accounts, we need to make the API call with the account specified
-      $payouts = \Stripe\Payout::all(
+      $payouts = $this->stripeApi->getClient()->payouts->all(
         $params,
         ['stripe_account' => $account_id]
       );
@@ -145,14 +138,11 @@ class PayoutService {
    */
   public function updatePayoutSchedule($account_id, $interval, array $schedule_options = []) {
     try {
-      $this->initStripeApi();
-      
       $payout_schedule = ['interval' => $interval] + $schedule_options;
       
-      $account = \Stripe\Account::update(
-        $account_id,
-        ['settings' => ['payouts' => ['schedule' => $payout_schedule]]]
-      );
+      $account = $this->stripeApi->update('Account', $account_id, [
+        'settings' => ['payouts' => ['schedule' => $payout_schedule]]
+      ]);
       
       $this->logger->info('Payout schedule updated for account @id: @interval', [
         '@id' => $account_id,
@@ -190,12 +180,10 @@ class PayoutService {
    */
   public function createManualPayout($account_id, $amount, $currency = 'usd', $description = '') {
     try {
-      $this->initStripeApi();
-      
       // Convert amount to minor units
       $minor_amount = $this->toMinorUnits($amount, $currency);
       
-      $payout = \Stripe\Payout::create([
+      $payout = $this->stripeApi->getClient()->payouts->create([
         'amount' => $minor_amount,
         'currency' => strtolower($currency),
         'description' => $description,
@@ -333,12 +321,12 @@ class PayoutService {
    *   The amount in minor units.
    */
   protected function toMinorUnits($amount, $currency) {
-    // Get the number of decimal places for this currency.
-    $decimal_places = 2;
-    if (in_array(strtoupper($currency), ['JPY'])) {
-      $decimal_places = 0;
-    }
-    
-    return (int) round($amount * pow(10, $decimal_places));
+    $currency_code = strtoupper($currency);
+    // @see https://stripe.com/docs/currencies#zero-decimal
+    $zero_decimal_currencies = [
+      'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA',
+      'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
+    ];
+    return in_array($currency_code, $zero_decimal_currencies) ? (int) $amount : (int) ($amount * 100);
   }
 }

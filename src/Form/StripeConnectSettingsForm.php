@@ -28,10 +28,7 @@ class StripeConnectSettingsForm extends ConfigFormBase {
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory service.
    */
-  public function __construct(
-    ConfigFactoryInterface $config_factory, 
-    LoggerChannelFactoryInterface $logger_factory
-  ) {
+  public function __construct(ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory) {
     parent::__construct($config_factory);
     $this->logger = $logger_factory->get('stripe_connect_marketplace');
   }
