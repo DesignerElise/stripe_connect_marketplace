@@ -6,6 +6,7 @@
     "require": {
         "drupal/commerce": "^2.30 || ^3.0",
         "drupal/commerce_stripe": "^1.0",
+        "stripe/stripe-php": "^10.0",
         "php": ">=8.1"
     },
     "require-dev": {
