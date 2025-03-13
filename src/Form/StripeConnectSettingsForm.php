@@ -5,6 +5,7 @@ namespace Drupal\stripe_connect_marketplace\Form;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -25,11 +26,17 @@ class StripeConnectSettingsForm extends ConfigFormBase {
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory service.
+   * @param \Drupal\Core\Config\TypedConfigManagerInterface $typed_config_manager
+   *   The typed config manager.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory) {
-    parent::__construct($config_factory);
+  public function __construct(
+    ConfigFactoryInterface $config_factory,
+    TypedConfigManagerInterface $typed_config_manager = NULL,
+    LoggerChannelFactoryInterface $logger_factory
+  ) {
+    parent::__construct($config_factory, $typed_config_manager);
     $this->logger = $logger_factory->get('stripe_connect_marketplace');
   }
 
@@ -39,6 +46,7 @@ class StripeConnectSettingsForm extends ConfigFormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
+      $container->get('config.typed'),
       $container->get('logger.factory')
     );
   }
@@ -90,10 +98,16 @@ class StripeConnectSettingsForm extends ConfigFormBase {
       '#open' => FALSE,
     ];
 
+    // Get key values safely, ensuring they're strings
+    $test_secret_key = $config->get('stripe_connect.test_secret_key') ?: '';
+    $test_publishable_key = $config->get('stripe_connect.test_publishable_key') ?: '';
+    $live_secret_key = $config->get('stripe_connect.live_secret_key') ?: '';
+    $live_publishable_key = $config->get('stripe_connect.live_publishable_key') ?: '';
+
     $form['stripe_connect']['keys']['test_secret_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Test Secret Key'),
-      '#default_value' => $this->maskApiKey($config->get('stripe_connect.test_secret_key')),
+      '#default_value' => $this->maskApiKey($test_secret_key),
       '#description' => $this->t('Enter your Stripe test secret key.'),
       '#attributes' => ['autocomplete' => 'off'],
     ];
@@ -101,7 +115,7 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $form['stripe_connect']['keys']['test_publishable_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Test Publishable Key'),
-      '#default_value' => $this->maskApiKey($config->get('stripe_connect.test_publishable_key')),
+      '#default_value' => $this->maskApiKey($test_publishable_key),
       '#description' => $this->t('Enter your Stripe test publishable key.'),
       '#attributes' => ['autocomplete' => 'off'],
     ];
@@ -109,7 +123,7 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $form['stripe_connect']['keys']['live_secret_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Live Secret Key'),
-      '#default_value' => $this->maskApiKey($config->get('stripe_connect.live_secret_key')),
+      '#default_value' => $this->maskApiKey($live_secret_key),
       '#description' => $this->t('Enter your Stripe live secret key.'),
       '#attributes' => ['autocomplete' => 'off'],
     ];
@@ -117,9 +131,15 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $form['stripe_connect']['keys']['live_publishable_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Live Publishable Key'),
-      '#default_value' => $this->maskApiKey($config->get('stripe_connect.live_publishable_key')),
+      '#default_value' => $this->maskApiKey($live_publishable_key),
       '#description' => $this->t('Enter your Stripe live publishable key.'),
       '#attributes' => ['autocomplete' => 'off'],
+    ];
+
+    // Add a hidden field to track when keys have been changed
+    $form['stripe_connect']['keys']['keys_changed'] = [
+      '#type' => 'hidden',
+      '#default_value' => 'no',
     ];
 
     // Webhook settings
@@ -138,10 +158,11 @@ class StripeConnectSettingsForm extends ConfigFormBase {
       '#description' => $this->t('Use this URL when configuring webhooks in your Stripe Dashboard.'),
     ];
 
+    $webhook_secret = $config->get('stripe_connect.webhook_secret') ?: '';
     $form['stripe_connect']['webhook']['webhook_secret'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Webhook Signing Secret'),
-      '#default_value' => $this->maskApiKey($config->get('stripe_connect.webhook_secret')),
+      '#default_value' => $this->maskApiKey($webhook_secret),
       '#description' => $this->t('Enter the webhook signing secret from your Stripe Dashboard.'),
       '#attributes' => ['autocomplete' => 'off'],
     ];
@@ -164,6 +185,8 @@ class StripeConnectSettingsForm extends ConfigFormBase {
       '#field_suffix' => '%',
     ];
 
+    $form['#attached']['library'][] = 'stripe_connect_marketplace/admin_settings';
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -178,13 +201,18 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $secret_key = $form_state->getValue(['stripe_connect', 'keys', $environment . '_secret_key']);
     $publishable_key = $form_state->getValue(['stripe_connect', 'keys', $environment . '_publishable_key']);
 
-    // Basic key format validation
-    if (!empty($secret_key) && !preg_match('/^sk_/', $secret_key)) {
-      $form_state->setError($form['stripe_connect']['keys'][$environment . '_secret_key'], $this->t('Secret key must start with sk_.'));
-    }
+    // Only validate if keys have been changed
+    $keys_changed = $form_state->getValue(['stripe_connect', 'keys', 'keys_changed']) === 'yes';
+    
+    if ($keys_changed) {
+      // Basic key format validation
+      if (!empty($secret_key) && !$this->isMaskedKey($secret_key) && !preg_match('/^sk_/', $secret_key)) {
+        $form_state->setError($form['stripe_connect']['keys'][$environment . '_secret_key'], $this->t('Secret key must start with sk_.'));
+      }
 
-    if (!empty($publishable_key) && !preg_match('/^pk_/', $publishable_key)) {
-      $form_state->setError($form['stripe_connect']['keys'][$environment . '_publishable_key'], $this->t('Publishable key must start with pk_.'));
+      if (!empty($publishable_key) && !$this->isMaskedKey($publishable_key) && !preg_match('/^pk_/', $publishable_key)) {
+        $form_state->setError($form['stripe_connect']['keys'][$environment . '_publishable_key'], $this->t('Publishable key must start with pk_.'));
+      }
     }
 
     // Validate application fee
@@ -209,18 +237,47 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $environment = $form_state->getValue(['stripe_connect', 'environment']);
     $secret_key = $form_state->getValue(['stripe_connect', 'keys', $environment . '_secret_key']);
     $publishable_key = $form_state->getValue(['stripe_connect', 'keys', $environment . '_publishable_key']);
-
-    // Only save the keys if they're not masked
-    if (!preg_match('/^\*+$/', $secret_key)) {
+    
+    // Only save if the key is not empty and not masked
+    if (!empty($secret_key) && !$this->isMaskedKey($secret_key)) {
       $config->set('stripe_connect.' . $environment . '_secret_key', $secret_key);
     }
-    if (!preg_match('/^\*+$/', $publishable_key)) {
+    
+    if (!empty($publishable_key) && !$this->isMaskedKey($publishable_key)) {
       $config->set('stripe_connect.' . $environment . '_publishable_key', $publishable_key);
+    }
+
+    // Save test keys
+    if ($environment !== 'test') {
+      $test_secret_key = $form_state->getValue(['stripe_connect', 'keys', 'test_secret_key']);
+      $test_publishable_key = $form_state->getValue(['stripe_connect', 'keys', 'test_publishable_key']);
+      
+      if (!empty($test_secret_key) && !$this->isMaskedKey($test_secret_key)) {
+        $config->set('stripe_connect.test_secret_key', $test_secret_key);
+      }
+      
+      if (!empty($test_publishable_key) && !$this->isMaskedKey($test_publishable_key)) {
+        $config->set('stripe_connect.test_publishable_key', $test_publishable_key);
+      }
+    }
+
+    // Save live keys
+    if ($environment !== 'live') {
+      $live_secret_key = $form_state->getValue(['stripe_connect', 'keys', 'live_secret_key']);
+      $live_publishable_key = $form_state->getValue(['stripe_connect', 'keys', 'live_publishable_key']);
+      
+      if (!empty($live_secret_key) && !$this->isMaskedKey($live_secret_key)) {
+        $config->set('stripe_connect.live_secret_key', $live_secret_key);
+      }
+      
+      if (!empty($live_publishable_key) && !$this->isMaskedKey($live_publishable_key)) {
+        $config->set('stripe_connect.live_publishable_key', $live_publishable_key);
+      }
     }
 
     // Save webhook secret
     $webhook_secret = $form_state->getValue(['stripe_connect', 'webhook', 'webhook_secret']);
-    if (!preg_match('/^\*+$/', $webhook_secret)) {
+    if (!empty($webhook_secret) && !$this->isMaskedKey($webhook_secret)) {
       $config->set('stripe_connect.webhook_secret', $webhook_secret);
     }
 
@@ -258,6 +315,19 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     }
     
     return substr($key, 0, 8) . str_repeat('*', $length - 12) . substr($key, -4);
+  }
+
+  /**
+   * Checks if a key is already masked.
+   *
+   * @param string $key
+   *   The key to check.
+   *
+   * @return bool
+   *   TRUE if the key is masked, FALSE otherwise.
+   */
+  protected function isMaskedKey($key) {
+    return !empty($key) && preg_match('/^\*+[^*]*$/', $key);
   }
 
   /**

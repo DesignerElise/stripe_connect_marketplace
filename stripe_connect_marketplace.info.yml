@@ -2,6 +2,7 @@ name: 'Stripe Connect Marketplace'
 type: module
 description: 'Enables Stripe Connect integration for Drupal Commerce multi-vendor marketplace.'
 core_version_requirement: ^10 || ^11
+version: '1.0.0'
 package: Commerce
 configure: stripe_connect_marketplace.settings
 dependencies:

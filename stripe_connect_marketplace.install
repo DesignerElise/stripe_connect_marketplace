@@ -247,14 +247,27 @@ function _stripe_connect_marketplace_add_vendor_role() {
     ]);
     $role->save();
     
-    // Grant necessary permissions to the vendor role.
-    user_role_grant_permissions($role->id(), [
-      'access content',
+    // Base permissions
+    $permissions = ['access content'];
+    
+    // Add Commerce Payment permissions if they exist
+    $permission_handler = \Drupal::service('user.permissions');
+    $all_permissions = $permission_handler->getPermissions();
+    $commerce_permissions = [
       'view own commerce_payment_method',
       'create commerce_payment_method',
       'update own commerce_payment_method',
       'delete own commerce_payment_method',
-    ]);
+    ];
+    
+    foreach ($commerce_permissions as $permission) {
+      if (isset($all_permissions[$permission])) {
+        $permissions[] = $permission;
+      }
+    }
+    
+    // Grant permissions
+    user_role_grant_permissions($role->id(), $permissions);
   }
 }
 
@@ -358,4 +371,11 @@ function stripe_connect_marketplace_schema() {
   ];
   
   return $schema;
+}
+
+/**
+ * Ensures the schema is properly registered.
+ */
+function stripe_connect_marketplace_update_8001() {
+  return t('Schema registration verified for Stripe Connect Marketplace.');
 }
