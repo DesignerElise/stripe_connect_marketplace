@@ -106,7 +106,7 @@ class ConnectController extends ControllerBase {
       // Check if user is logged in
       if ($this->currentUser->isAnonymous()) {
         $this->messenger()->addError($this->t('You must be logged in to become a vendor.'));
-        return new RedirectResponse(Url::fromRoute('user.login')->toString());
+        return new TrustedRedirectResponse($account_link->url);
       }
       
       // Load the full user entity
