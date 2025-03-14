@@ -141,21 +141,27 @@ class WebhookController extends ControllerBase {
       // Log the event type
       $this->logger->info('Processing Stripe webhook: @type', ['@type' => $event->type]);
       
+      // Determine the account ID if this is a Connect event
+      $account_id = null;
+      if (isset($event->account)) {
+        $account_id = $event->account;
+      }
+      
       // Process the event based on its type
       switch ($event->type) {
         case 'payment_intent.succeeded':
-          return $this->handlePaymentIntentSucceeded($event->data->object);
+          return $this->handlePaymentIntentSucceeded($event->data->object, $account_id);
           
         case 'payment_intent.payment_failed':
-          return $this->handlePaymentIntentFailed($event->data->object);
+          return $this->handlePaymentIntentFailed($event->data->object, $account_id);
           
         case 'charge.refunded':
-          return $this->handleChargeRefunded($event->data->object);
+          return $this->handleChargeRefunded($event->data->object, $account_id);
           
         case 'payout.created':
         case 'payout.paid':
         case 'payout.failed':
-          return $this->handlePayoutEvent($event->data->object, $event->type);
+          return $this->handlePayoutEvent($event->data->object, $event->type, $account_id);
           
         case 'account.updated':
           return $this->handleAccountUpdated($event->data->object);
@@ -177,11 +183,13 @@ class WebhookController extends ControllerBase {
    *
    * @param \Stripe\PaymentIntent $payment_intent
    *   The payment intent object.
+   * @param string $account_id
+   *   The connected account ID, if any.
    *
    * @return \Symfony\Component\HttpFoundation\Response
    *   The response object.
    */
-  protected function handlePaymentIntentSucceeded(\Stripe\PaymentIntent $payment_intent) {
+  protected function handlePaymentIntentSucceeded(\Stripe\PaymentIntent $payment_intent, $account_id = null) {
     try {
       // Check if this payment is related to an order
       if (!isset($payment_intent->metadata->order_id)) {
@@ -229,11 +237,13 @@ class WebhookController extends ControllerBase {
    *
    * @param \Stripe\PaymentIntent $payment_intent
    *   The payment intent object.
+   * @param string $account_id
+   *   The connected account ID, if any.
    *
    * @return \Symfony\Component\HttpFoundation\Response
    *   The response object.
    */
-  protected function handlePaymentIntentFailed(\Stripe\PaymentIntent $payment_intent) {
+  protected function handlePaymentIntentFailed(\Stripe\PaymentIntent $payment_intent, $account_id = null) {
     try {
       // Check if this payment is related to an order
       if (!isset($payment_intent->metadata->order_id)) {
@@ -269,11 +279,13 @@ class WebhookController extends ControllerBase {
    *
    * @param \Stripe\Charge $charge
    *   The charge object.
+   * @param string $account_id
+   *   The connected account ID, if any.
    *
    * @return \Symfony\Component\HttpFoundation\Response
    *   The response object.
    */
-  protected function handleChargeRefunded(\Stripe\Charge $charge) {
+  protected function handleChargeRefunded(\Stripe\Charge $charge, $account_id = null) {
     try {
       // Check if this charge is related to an order
       if (!isset($charge->metadata->order_id)) {
@@ -311,28 +323,31 @@ class WebhookController extends ControllerBase {
    *   The payout object.
    * @param string $event_type
    *   The event type.
+   * @param string $account_id
+   *   The connected account ID, if any.
    *
    * @return \Symfony\Component\HttpFoundation\Response
    *   The response object.
    */
-  protected function handlePayoutEvent(\Stripe\Payout $payout, $event_type) {
+  protected function handlePayoutEvent(\Stripe\Payout $payout, $event_type, $account_id = null) {
     try {
-      // Check if this is a connected account payout
-      $account_id = $payout->destination;
-      if (empty($account_id)) {
-        $this->logger->info('No destination account in payout data');
+      // Get the account ID either from the payout destination or from the event
+      $connection_id = $payout->destination ?: $account_id;
+      
+      if (empty($connection_id)) {
+        $this->logger->info('No account ID identified for payout event');
         return new Response('No action taken', 200);
       }
       
       // Find the vendor user
-      $vendor_id = $this->getVendorIdFromStripeAccount($account_id);
+      $vendor_id = $this->getVendorIdFromStripeAccount($connection_id);
       if (!$vendor_id) {
-        $this->logger->warning('Vendor not found for Stripe account: @account_id', ['@account_id' => $account_id]);
+        $this->logger->warning('Vendor not found for Stripe account: @account_id', ['@account_id' => $connection_id]);
         return new Response('Vendor not found', 200);
       }
       
       // Track the payout
-      $this->payoutService->trackPayout($payout, $account_id, $vendor_id);
+      $this->payoutService->trackPayout($payout, $connection_id, $vendor_id);
       
       // Log the event
       $this->logger->info('@event for vendor @vendor_id: @amount', [

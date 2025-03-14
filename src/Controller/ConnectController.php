@@ -106,7 +106,7 @@ class ConnectController extends ControllerBase {
       // Check if user is logged in
       if ($this->currentUser->isAnonymous()) {
         $this->messenger()->addError($this->t('You must be logged in to become a vendor.'));
-        return new TrustedRedirectResponse($account_link->url);
+        return new RedirectResponse(Url::fromRoute('user.login')->toString());
       }
       
       // Load the full user entity
@@ -121,8 +121,18 @@ class ConnectController extends ControllerBase {
       // Get the user's email
       $email = $user->getEmail();
       
-      // Create a Stripe Connect account
-      $account = $this->paymentService->createConnectAccount($email);
+      // Create a Stripe Connect account with enhanced capabilities for direct charges
+      $account = $this->paymentService->createConnectAccount($email, 'US', [
+        'capabilities' => [
+          'card_payments' => ['requested' => true],
+          'transfers' => ['requested' => true],
+          // Add any other capabilities needed for your marketplace
+        ],
+        'business_profile' => [
+          'mcc' => '5734', // Computer Software Stores (default, can be changed)
+          'url' => \Drupal::request()->getSchemeAndHttpHost(),
+        ],
+      ]);
       
       // Save the Stripe account ID to the user
       if ($user->hasField('field_stripe_account_id')) {
@@ -153,7 +163,7 @@ class ConnectController extends ControllerBase {
       $account_link = $this->paymentService->createAccountLink($account->id, $refresh_url, $return_url);
       
       // Redirect to the Stripe hosted onboarding page
-      return new RedirectResponse($account_link->url);
+      return new TrustedRedirectResponse($account_link->url);
     }
     catch (\Exception $e) {
       $this->logger->error('Error creating Stripe Connect account: @message', ['@message' => $e->getMessage()]);
@@ -222,11 +232,14 @@ class ConnectController extends ControllerBase {
           $user->save();
         }
         
-        $this->messenger()->addStatus($this->t('Congratulations! Your vendor account is now set up and ready to receive payments.'));
+        $this->messenger()->addStatus($this->t('Congratulations! Your vendor account is now set up and ready to receive payments directly through Stripe.'));
       }
       else {
         $this->messenger()->addWarning($this->t('Your Stripe account has been created, but onboarding is not yet complete. Some information may still be needed.'));
       }
+      
+      // Get marketplace fee for display in the template
+      $app_fee_percent = $config->get('stripe_connect.application_fee_percent');
       
       // Display account details
       return [
@@ -238,223 +251,15 @@ class ConnectController extends ControllerBase {
           'details_submitted' => $account->details_submitted,
         ],
         '#user' => $user,
+        '#config' => [
+          'app_fee_percent' => $app_fee_percent,
+        ],
       ];
     }
     catch (\Exception $e) {
       $this->logger->error('Error completing onboarding: @message', ['@message' => $e->getMessage()]);
       $this->messenger()->addError($this->t('An error occurred while completing your vendor setup. Please try again later.'));
       return new RedirectResponse(Url::fromRoute('<front>')->toString());
-    }
-  }
-
-  /**
-   * Displays the vendor terms and conditions page.
-   *
-   * @return array
-   *   A render array containing the vendor terms and conditions.
-   */
-  public function vendorTerms() {
-    return [
-      '#theme' => 'stripe_connect_vendor_terms',
-      '#attached' => [
-        'library' => [
-          'stripe_connect_marketplace/vendor_terms',
-        ],
-      ],
-      '#terms' => [
-        'marketplace_name' => $this->configFactory->get('system.site')->get('name'),
-        'stripe_connect_description' => $this->t('By becoming a vendor, you agree to use our Stripe Connect platform for processing payments.'),
-        'key_terms' => [
-          $this->t('You will provide accurate business information.'),
-          $this->t('You authorize us to collect application fees.'),
-          $this->t('You comply with Stripe\'s terms of service.'),
-          $this->t('You maintain compliance with all applicable laws and regulations.'),
-        ],
-        'payout_description' => $this->t('Payouts will be processed according to the schedule set in your Stripe Connect account.'),
-        'liability_disclaimer' => $this->t('This marketplace is not responsible for individual transaction disputes.'),
-      ],
-    ];
-  }
-
-  /**
-   * Views details of a specific vendor.
-   *
-   * @param int $user
-   *   The user ID of the vendor.
-   *
-   * @return array
-   *   A render array with vendor details.
-   */
-  public function viewVendor($user) {
-    try {
-      // Check access permission
-      if (!$this->currentUser->hasPermission('access stripe connect admin')) {
-        $this->messenger()->addError($this->t('You do not have permission to access this page.'));
-        return new RedirectResponse(Url::fromRoute('<front>')->toString());
-      }
-      
-      // Load the user
-      $vendor = $this->entityTypeManager->getStorage('user')->load($user);
-      
-      if (!$vendor) {
-        $this->messenger()->addError($this->t('Vendor not found.'));
-        return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
-      }
-      
-      // Check if vendor has a Stripe account
-      if (!$vendor->hasField('field_stripe_account_id') || $vendor->get('field_stripe_account_id')->isEmpty()) {
-        $this->messenger()->addWarning($this->t('This vendor does not have a Stripe account connected.'));
-        return [
-          '#markup' => $this->t('No Stripe account found for this vendor.'),
-        ];
-      }
-      
-      // Get the Stripe account ID
-      $account_id = $vendor->get('field_stripe_account_id')->value;
-      
-      // Initialize Stripe API
-      $config = $this->configFactory->get('stripe_connect_marketplace.settings');
-      $environment = $config->get('stripe_connect.environment');
-      $secret_key = $environment == 'live' 
-        ? $config->get('stripe_connect.live_secret_key') 
-        : $config->get('stripe_connect.test_secret_key');
-      
-      if (empty($secret_key)) {
-        throw new \Exception('Stripe API key is not configured.');
-      }
-      
-      \Stripe\Stripe::setApiKey($secret_key);
-      
-      // Retrieve the Stripe account
-      $account = \Stripe\Account::retrieve($account_id);
-      
-      // Get recent payouts
-      $payouts = \Stripe\Payout::all(
-        ['limit' => 10],
-        ['stripe_account' => $account_id]
-      );
-      
-      // Get balance
-      $balance = \Stripe\Balance::retrieve(
-        [],
-        ['stripe_account' => $account_id]
-      );
-      
-      // Format balance data
-      $available_balance = [];
-      foreach ($balance->available as $amount) {
-        $available_balance[] = [
-          'amount' => $amount->amount / 100,
-          'currency' => strtoupper($amount->currency),
-        ];
-      }
-      
-      $pending_balance = [];
-      foreach ($balance->pending as $amount) {
-        $pending_balance[] = [
-          'amount' => $amount->amount / 100,
-          'currency' => strtoupper($amount->currency),
-        ];
-      }
-      
-      return [
-        '#theme' => 'stripe_connect_vendor_details',
-        '#vendor' => [
-          'uid' => $vendor->id(),
-          'name' => $vendor->getDisplayName(),
-          'email' => $vendor->getEmail(),
-        ],
-        '#account' => [
-          'id' => $account->id,
-          'type' => $account->type,
-          'charges_enabled' => $account->charges_enabled,
-          'payouts_enabled' => $account->payouts_enabled,
-          'details_submitted' => $account->details_submitted,
-          'created' => $account->created,
-        ],
-        '#balance' => [
-          'available' => $available_balance,
-          'pending' => $pending_balance,
-        ],
-        '#payouts' => $payouts->data,
-      ];
-    }
-    catch (\Exception $e) {
-      $this->logger->error('Error viewing vendor details: @message', ['@message' => $e->getMessage()]);
-      $this->messenger()->addError($this->t('An error occurred while retrieving vendor details.'));
-      return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
-    }
-  }
-
-  /**
-   * Views payouts for a specific vendor.
-   *
-   * @param int $user
-   *   The user ID of the vendor.
-   *
-   * @return array
-   *   A render array with vendor payouts.
-   */
-  public function viewVendorPayouts($user) {
-    try {
-      // Check access permission
-      if (!$this->currentUser->hasPermission('access stripe connect admin')) {
-        $this->messenger()->addError($this->t('You do not have permission to access this page.'));
-        return new RedirectResponse(Url::fromRoute('<front>')->toString());
-      }
-      
-      // Load the user
-      $vendor = $this->entityTypeManager->getStorage('user')->load($user);
-      
-      if (!$vendor) {
-        $this->messenger()->addError($this->t('Vendor not found.'));
-        return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
-      }
-      
-      // Check if vendor has a Stripe account
-      if (!$vendor->hasField('field_stripe_account_id') || $vendor->get('field_stripe_account_id')->isEmpty()) {
-        $this->messenger()->addWarning($this->t('This vendor does not have a Stripe account connected.'));
-        return [
-          '#markup' => $this->t('No Stripe account found for this vendor.'),
-        ];
-      }
-      
-      // Get the Stripe account ID
-      $account_id = $vendor->get('field_stripe_account_id')->value;
-      
-      // Initialize Stripe API
-      $config = $this->configFactory->get('stripe_connect_marketplace.settings');
-      $environment = $config->get('stripe_connect.environment');
-      $secret_key = $environment == 'live' 
-        ? $config->get('stripe_connect.live_secret_key') 
-        : $config->get('stripe_connect.test_secret_key');
-      
-      if (empty($secret_key)) {
-        throw new \Exception('Stripe API key is not configured.');
-      }
-      
-      \Stripe\Stripe::setApiKey($secret_key);
-      
-      // Get all payouts for this vendor
-      $payouts = \Stripe\Payout::all(
-        ['limit' => 50],
-        ['stripe_account' => $account_id]
-      );
-      
-      return [
-        '#theme' => 'stripe_connect_vendor_payouts',
-        '#vendor' => [
-          'uid' => $vendor->id(),
-          'name' => $vendor->getDisplayName(),
-          'email' => $vendor->getEmail(),
-        ],
-        '#payouts' => $payouts->data,
-      ];
-    }
-    catch (\Exception $e) {
-      $this->logger->error('Error viewing vendor payouts: @message', ['@message' => $e->getMessage()]);
-      $this->messenger()->addError($this->t('An error occurred while retrieving vendor payouts.'));
-      return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
     }
   }
 
@@ -535,6 +340,9 @@ class ConnectController extends ControllerBase {
       // Get link to Stripe dashboard
       $dashboard_link = \Stripe\Account::createLoginLink($account_id);
       
+      // Get application fee percentage for the template
+      $app_fee_percent = $config->get('stripe_connect.application_fee_percent');
+      
       return [
         '#theme' => 'stripe_connect_vendor_dashboard',
         '#account' => [
@@ -550,6 +358,11 @@ class ConnectController extends ControllerBase {
         ],
         '#payouts' => $payouts->data,
         '#user' => $user,
+        '#config' => [
+          'stripe_connect' => [
+            'application_fee_percent' => $app_fee_percent,
+          ],
+        ],
       ];
     }
     catch (\Exception $e) {
@@ -656,6 +469,9 @@ class ConnectController extends ControllerBase {
       // Get recent platform payouts
       $payouts = \Stripe\Payout::all(['limit' => 10]);
       
+      // Get application fee percentage for the template
+      $app_fee_percent = $config->get('stripe_connect.application_fee_percent');
+      
       return [
         '#theme' => 'stripe_connect_admin_dashboard',
         '#vendors' => $vendors,
@@ -665,6 +481,11 @@ class ConnectController extends ControllerBase {
         ],
         '#payouts' => $payouts->data,
         '#environment' => $environment,
+        '#config' => [
+          'stripe_connect' => [
+            'application_fee_percent' => $app_fee_percent,
+          ],
+        ],
       ];
     }
     catch (\Exception $e) {

@@ -147,7 +147,7 @@ class PaymentService {
   }
 
   /**
-   * Create a split payment with application fee.
+   * Create a direct payment with application fee.
    *
    * @param float $amount
    *   The payment amount.
@@ -167,7 +167,7 @@ class PaymentService {
    *
    * @throws \Exception
    */
-  public function createSplitPayment($amount, $currency, $payment_method_id, $vendor_account_id, $order_id, $fee_percentage = NULL) {
+  public function createDirectPayment($amount, $currency, $payment_method_id, $vendor_account_id, $order_id, $fee_percentage = NULL) {
     try {
       // Convert amount to minor units
       $minor_amount = $this->toMinorUnits($amount, $currency);
@@ -181,24 +181,22 @@ class PaymentService {
       // Calculate application fee
       $application_fee = round($minor_amount * ($fee_percentage / 100));
       
-      // Create payment intent
+      // Create payment intent directly on the connected account
       $payment_intent = $this->stripeApi->create('PaymentIntent', [
         'amount' => $minor_amount,
         'currency' => strtolower($currency),
         'payment_method' => $payment_method_id,
         'confirmation_method' => 'manual',
         'application_fee_amount' => $application_fee,
-        'transfer_data' => [
-          'destination' => $vendor_account_id,
-        ],
         'metadata' => [
           'order_id' => $order_id,
         ],
-      ]);
+      ], ['stripe_account' => $vendor_account_id]);
       
-      $this->logger->info('Split payment created: @id for order @order_id', [
+      $this->logger->info('Direct payment created: @id for order @order_id on account @account_id', [
         '@id' => $payment_intent->id,
         '@order_id' => $order_id,
+        '@account_id' => $vendor_account_id,
       ]);
       
       return $payment_intent;

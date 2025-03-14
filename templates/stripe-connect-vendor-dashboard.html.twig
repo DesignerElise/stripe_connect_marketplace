@@ -20,6 +20,10 @@
 
 <div class="stripe-connect-vendor-dashboard">
   <h2>{{ 'Vendor Dashboard'|t }}</h2>
+  
+  <div class="vendor-dashboard-info">
+    <p>{{ 'As a vendor in our marketplace, you collect payments directly through your Stripe Connect account. Our platform adds a %fee% fee to each transaction to cover operational costs.'|t({'%fee%': config.get('stripe_connect.application_fee_percent') ~ '%'}) }}</p>
+  </div>
 
   <div class="vendor-account-status">
     <h3>{{ 'Account Status'|t }}</h3>
@@ -36,6 +40,7 @@
             <span class="status enabled">{{ 'Yes'|t }}</span>
           {% else %}
             <span class="status disabled">{{ 'No'|t }}</span>
+            <p class="status-description">{{ 'You cannot process payments until charges are enabled.'|t }}</p>
           {% endif %}
         </span>
       </div>
@@ -47,6 +52,7 @@
             <span class="status enabled">{{ 'Yes'|t }}</span>
           {% else %}
             <span class="status disabled">{{ 'No'|t }}</span>
+            <p class="status-description">{{ 'You cannot receive payouts until they are enabled.'|t }}</p>
           {% endif %}
         </span>
       </div>
@@ -58,6 +64,7 @@
             <span class="status enabled">{{ 'Yes'|t }}</span>
           {% else %}
             <span class="status disabled">{{ 'No'|t }}</span>
+            <p class="status-description">{{ 'Please complete your onboarding to access all features.'|t }}</p>
           {% endif %}
         </span>
       </div>
@@ -72,6 +79,7 @@
 
   <div class="vendor-balance">
     <h3>{{ 'Balance'|t }}</h3>
+    <p>{{ 'This reflects your current balance in your Stripe Connect account.'|t }}</p>
     
     <div class="balance-section">
       <h4>{{ 'Available'|t }}</h4>
@@ -106,6 +114,7 @@
 
   <div class="vendor-payouts">
     <h3>{{ 'Recent Payouts'|t }}</h3>
+    <p>{{ 'Payouts are sent directly from your Stripe account to your bank account based on your payout schedule.'|t }}</p>
     
     {% if payouts %}
       <table class="payouts-table">
@@ -133,10 +142,11 @@
 
   <div class="vendor-dashboard-actions">
     <h3>{{ 'Actions'|t }}</h3>
+    <p>{{ 'For detailed payment information and account settings, visit your Stripe Dashboard.'|t }}</p>
     <ul class="action-links">
       {% if account.dashboard_url %}
         <li>
-          <a href="{{ account.dashboard_url }}" class="button" target="_blank">{{ 'Access Stripe Dashboard'|t }}</a>
+          <a href="{{ account.dashboard_url }}" class="button button--primary" target="_blank">{{ 'Access Stripe Dashboard'|t }}</a>
         </li>
       {% endif %}
     </ul>

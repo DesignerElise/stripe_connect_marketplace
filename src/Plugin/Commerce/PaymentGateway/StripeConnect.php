@@ -168,6 +168,7 @@ class StripeConnect extends Stripe {
     $application_fee_amount = round($amount_decimal * $application_fee_percent / 100, 2);
     $application_fee_amount_cents = $this->minorUnits($payment_amount->getCurrencyCode(), $application_fee_amount);
 
+    // Create a payment intent directly on the connected account.
     $intent_array = [
       'amount' => $this->minorUnits($payment_amount->getCurrencyCode(), $amount_decimal),
       'currency' => $currency_code,
@@ -175,9 +176,6 @@ class StripeConnect extends Stripe {
       'confirmation_method' => 'manual',
       'confirm' => TRUE,
       'application_fee_amount' => $application_fee_amount_cents,
-      'transfer_data' => [
-        'destination' => $vendor_account_id,
-      ],
       'metadata' => [
         'order_id' => $order->id(),
         'payment_id' => $payment->id(),
@@ -190,8 +188,11 @@ class StripeConnect extends Stripe {
       $intent_array['capture_method'] = 'manual';
     }
 
+    // Options for the connected account.
+    $options = ['stripe_account' => $vendor_account_id];
+
     try {
-      $intent = $this->stripeApi->create('PaymentIntent', $intent_array);
+      $intent = $this->stripeApi->create('PaymentIntent', $intent_array, $options);
       
       // Update various payment properties based on the intent.
       $next_state = $capture ? 'completed' : 'authorization';
@@ -307,7 +308,6 @@ class StripeConnect extends Stripe {
    * {@inheritdoc}
    */
   public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
-    // Override the parent's capturePayment to ensure the application fee is maintained.
     $this->assertPaymentState($payment, ['authorization']);
     $remote_id = $payment->getRemoteId();
 
@@ -315,12 +315,27 @@ class StripeConnect extends Stripe {
       // If not specified, capture the entire amount.
       $amount = $amount ?: $payment->getAmount();
       $amount_decimal = $amount->getNumber();
-      $currency_code = strtolower($amount->getCurrencyCode());
       
-      $intent = $this->stripeApi->retrieve('PaymentIntent', $remote_id);
-      $intent = $this->stripeApi->getClient()->paymentIntents->capture($remote_id, [
+      // Get the vendor account ID for this payment.
+      $order = $payment->getOrder();
+      $vendor_account_id = $this->getVendorStripeAccountId($order);
+      
+      if (empty($vendor_account_id)) {
+        throw new PaymentGatewayException('Vendor Stripe account not found.');
+      }
+      
+      // Options for the connected account.
+      $options = ['stripe_account' => $vendor_account_id];
+
+      // Retrieve intent from the connected account.
+      $intent = $this->stripeApi->retrieve('PaymentIntent', $remote_id, [], $options);
+      
+      // Capture the payment on the connected account.
+      $capture_params = [
         'amount_to_capture' => $this->minorUnits($amount->getCurrencyCode(), $amount_decimal),
-      ]);
+      ];
+      
+      $intent = $this->client->paymentIntents->capture($remote_id, $capture_params, $options);
       
       if ($intent->status === 'succeeded') {
         $payment->setState('completed');
@@ -329,6 +344,93 @@ class StripeConnect extends Stripe {
       }
       else {
         throw new PaymentGatewayException('Only authorized payments can be captured.');
+      }
+    }
+    catch (\Stripe\Exception\ApiErrorException $e) {
+      $this->logger->error($e->getMessage());
+      throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function voidPayment(PaymentInterface $payment) {
+    $this->assertPaymentState($payment, ['authorization']);
+    $remote_id = $payment->getRemoteId();
+
+    try {
+      // Get the vendor account ID for this payment.
+      $order = $payment->getOrder();
+      $vendor_account_id = $this->getVendorStripeAccountId($order);
+      
+      if (empty($vendor_account_id)) {
+        throw new PaymentGatewayException('Vendor Stripe account not found.');
+      }
+      
+      // Options for the connected account.
+      $options = ['stripe_account' => $vendor_account_id];
+
+      // Cancel the payment intent on the connected account.
+      $intent = $this->stripeApi->update('PaymentIntent', $remote_id, ['cancellation_reason' => 'requested_by_customer'], $options);
+      
+      $payment->setState('authorization_voided');
+      $payment->save();
+    }
+    catch (\Stripe\Exception\ApiErrorException $e) {
+      $this->logger->error($e->getMessage());
+      throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
+    $remote_id = $payment->getRemoteId();
+
+    try {
+      // If not specified, refund the entire amount.
+      $amount = $amount ?: $payment->getAmount();
+      $amount_decimal = $amount->getNumber();
+      
+      // Get the vendor account ID for this payment.
+      $order = $payment->getOrder();
+      $vendor_account_id = $this->getVendorStripeAccountId($order);
+      
+      if (empty($vendor_account_id)) {
+        throw new PaymentGatewayException('Vendor Stripe account not found.');
+      }
+      
+      // Options for the connected account.
+      $options = ['stripe_account' => $vendor_account_id];
+
+      // Create the refund on the connected account.
+      $refund_params = [
+        'payment_intent' => $remote_id,
+        'amount' => $this->minorUnits($amount->getCurrencyCode(), $amount_decimal),
+      ];
+      
+      $refund = $this->stripeApi->create('Refund', $refund_params, $options);
+      
+      if ($refund->status === 'succeeded') {
+        $old_refunded_amount = $payment->getRefundedAmount();
+        $new_refunded_amount = $old_refunded_amount->add($amount);
+        $payment->setRefundedAmount($new_refunded_amount);
+        
+        // Set state based on how much has been refunded.
+        if ($new_refunded_amount->lessThan($payment->getAmount())) {
+          $payment->setState('partially_refunded');
+        }
+        else {
+          $payment->setState('refunded');
+        }
+        
+        $payment->save();
+      }
+      else {
+        throw new PaymentGatewayException('Refund failed. Status: ' . $refund->status);
       }
     }
     catch (\Stripe\Exception\ApiErrorException $e) {

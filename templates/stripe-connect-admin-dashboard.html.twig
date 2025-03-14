@@ -1,77 +1,94 @@
 {#
 /**
  * @file
- * Template for Stripe Connect vendor dashboard.
+ * Template for Stripe Connect admin dashboard.
  *
  * Available variables:
- * - account: The Stripe Connect account information.
- *   - id: The Stripe account ID.
- *   - charges_enabled: Whether charges are enabled.
- *   - payouts_enabled: Whether payouts are enabled.
- *   - details_submitted: Whether account details are submitted.
- *   - dashboard_url: URL to the Stripe Express dashboard.
- * - balance: The account balance information.
+ * - vendors: List of vendors with their Stripe Connect accounts.
+ * - balance: The platform account balance information.
  *   - available: List of available balances by currency.
  *   - pending: List of pending balances by currency.
  * - payouts: List of recent payouts.
- * - user: The vendor user entity.
+ * - environment: The Stripe environment ('test' or 'live').
  */
 #}
 
-<div class="stripe-connect-vendor-dashboard">
-  <h2>{{ 'Vendor Dashboard'|t }}</h2>
+<div class="stripe-connect-admin-dashboard">
+  <h2>{{ 'Stripe Connect Administration'|t }}</h2>
 
-  <div class="vendor-account-status">
-    <h3>{{ 'Account Status'|t }}</h3>
-    <div class="account-info">
-      <div class="account-field">
-        <span class="label">{{ 'Account ID:'|t }}</span>
-        <span class="value">{{ account.id }}</span>
-      </div>
-      
-      <div class="account-field">
-        <span class="label">{{ 'Charges Enabled:'|t }}</span>
-        <span class="value">
-          {% if account.charges_enabled %}
-            <span class="status enabled">{{ 'Yes'|t }}</span>
-          {% else %}
-            <span class="status disabled">{{ 'No'|t }}</span>
-          {% endif %}
-        </span>
-      </div>
-      
-      <div class="account-field">
-        <span class="label">{{ 'Payouts Enabled:'|t }}</span>
-        <span class="value">
-          {% if account.payouts_enabled %}
-            <span class="status enabled">{{ 'Yes'|t }}</span>
-          {% else %}
-            <span class="status disabled">{{ 'No'|t }}</span>
-          {% endif %}
-        </span>
-      </div>
-      
-      <div class="account-field">
-        <span class="label">{{ 'Onboarding Complete:'|t }}</span>
-        <span class="value">
-          {% if account.details_submitted %}
-            <span class="status enabled">{{ 'Yes'|t }}</span>
-          {% else %}
-            <span class="status disabled">{{ 'No'|t }}</span>
-          {% endif %}
-        </span>
-      </div>
-      
-      {% if not account.details_submitted %}
-        <div class="account-action">
-          <a href="{{ path('stripe_connect_marketplace.onboard_vendor') }}" class="button">{{ 'Complete Onboarding'|t }}</a>
-        </div>
-      {% endif %}
+  {% if environment == 'test' %}
+    <div class="environment-notice test-mode">
+      <strong>{{ 'Test Mode Active'|t }}</strong>
+      <p>{{ 'Stripe is currently in TEST mode. No real payments will be processed.'|t }}</p>
     </div>
+  {% else %}
+    <div class="environment-notice live-mode">
+      <strong>{{ 'Live Mode Active'|t }}</strong>
+      <p>{{ 'Stripe is in LIVE mode. Real payments will be processed.'|t }}</p>
+    </div>
+  {% endif %}
+
+  <div class="marketplace-info">
+    <h3>{{ 'Marketplace Information'|t }}</h3>
+    <p>{{ 'Your marketplace is configured to allow vendors to collect payments directly. A platform fee of %fee% is automatically collected on each transaction.'|t({'%fee%': config.get('stripe_connect.application_fee_percent') ~ '%'}) }}</p>
   </div>
 
-  <div class="vendor-balance">
-    <h3>{{ 'Balance'|t }}</h3>
+  <div class="admin-vendor-list">
+    <h3>{{ 'Connected Vendors'|t }}</h3>
+    
+    {% if vendors %}
+      <table class="vendors-table">
+        <thead>
+          <tr>
+            <th>{{ 'Vendor'|t }}</th>
+            <th>{{ 'Stripe Account'|t }}</th>
+            <th>{{ 'Status'|t }}</th>
+            <th>{{ 'Capabilities'|t }}</th>
+            <th>{{ 'Date Connected'|t }}</th>
+            <th>{{ 'Actions'|t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for vendor in vendors %}
+            <tr>
+              <td>{{ vendor.name }}</td>
+              <td>
+                <span class="stripe-account-id">{{ vendor.account_id }}</span>
+              </td>
+              <td>
+                {% if vendor.details_submitted %}
+                  <span class="status enabled">{{ 'Onboarded'|t }}</span>
+                {% else %}
+                  <span class="status pending">{{ 'Incomplete'|t }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="capabilities">
+                  <span class="capability {{ vendor.charges_enabled ? 'enabled' : 'disabled' }}">
+                    {{ 'Charges'|t }}: {{ vendor.charges_enabled ? 'Enabled'|t : 'Disabled'|t }}
+                  </span>
+                  <span class="capability {{ vendor.payouts_enabled ? 'enabled' : 'disabled' }}">
+                    {{ 'Payouts'|t }}: {{ vendor.payouts_enabled ? 'Enabled'|t : 'Disabled'|t }}
+                  </span>
+                </div>
+              </td>
+              <td>{{ vendor.created|date('Y-m-d') }}</td>
+              <td class="actions">
+                <a href="{{ path('stripe_connect_marketplace.view_vendor', {'user': vendor.uid}) }}" class="button button--small">{{ 'View'|t }}</a>
+                <a href="{{ path('stripe_connect_marketplace.view_vendor_payouts', {'user': vendor.uid}) }}" class="button button--small">{{ 'Payouts'|t }}</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>{{ 'No vendors have connected their Stripe accounts yet.'|t }}</p>
+    {% endif %}
+  </div>
+
+  <div class="admin-platform-balance">
+    <h3>{{ 'Platform Balance'|t }}</h3>
+    <p>{{ 'This is your Stripe platform account balance, which includes application fees collected from vendors.'|t }}</p>
     
     <div class="balance-section">
       <h4>{{ 'Available'|t }}</h4>
@@ -104,8 +121,9 @@
     </div>
   </div>
 
-  <div class="vendor-payouts">
-    <h3>{{ 'Recent Payouts'|t }}</h3>
+  <div class="admin-platform-payouts">
+    <h3>{{ 'Recent Platform Payouts'|t }}</h3>
+    <p>{{ 'Recent payouts from your Stripe platform account to your bank account.'|t }}</p>
     
     {% if payouts %}
       <table class="payouts-table">
@@ -131,14 +149,9 @@
     {% endif %}
   </div>
 
-  <div class="vendor-dashboard-actions">
-    <h3>{{ 'Actions'|t }}</h3>
-    <ul class="action-links">
-      {% if account.dashboard_url %}
-        <li>
-          <a href="{{ account.dashboard_url }}" class="button" target="_blank">{{ 'Access Stripe Dashboard'|t }}</a>
-        </li>
-      {% endif %}
-    </ul>
+  <div class="admin-stripe-actions">
+    <h3>{{ 'Stripe Dashboard'|t }}</h3>
+    <p>{{ 'For detailed platform account information, visit your Stripe Dashboard.'|t }}</p>
+    <a href="https://dashboard.stripe.com/{{ environment == 'test' ? 'test/' : '' }}connect/accounts" class="button" target="_blank">{{ 'Stripe Dashboard'|t }}</a>
   </div>
 </div>

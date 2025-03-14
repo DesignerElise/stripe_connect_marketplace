@@ -111,13 +111,15 @@ class StripeApiService {
    *   The resource name (e.g., 'PaymentIntent', 'Account').
    * @param array $params
    *   The parameters for the resource.
+   * @param array $options
+   *   Additional options for the request, e.g., ['stripe_account' => 'acct_123'].
    *
    * @return object
    *   The created Stripe resource or a mock object in test mode.
    *
    * @throws \Exception
    */
-  public function create($resource, array $params) {
+  public function create($resource, array $params, array $options = []) {
     // If we're in test mode, return mock data
     if ($this->testMode) {
       return $this->createMockResource($resource, $params);
@@ -129,14 +131,41 @@ class StripeApiService {
     }
     
     try {
-      $method = lcfirst($resource) . 's';
-      
-      // Make sure the method exists on the client
-      if (!isset($this->client->{$method})) {
-        throw new \Exception("Invalid Stripe resource type: $resource");
+      // Convert the resource name to the appropriate method name based on the Stripe API structure
+      switch ($resource) {
+        case 'Account':
+          return $this->client->accounts->create($params, $options);
+        
+        case 'AccountLink':
+          return $this->client->accountLinks->create($params, $options);
+        
+        case 'PaymentIntent':
+          return $this->client->paymentIntents->create($params, $options);
+          
+        case 'SetupIntent':
+          return $this->client->setupIntents->create($params, $options);
+          
+        case 'Customer':
+          return $this->client->customers->create($params, $options);
+          
+        case 'Source':
+          return $this->client->sources->create($params, $options);
+          
+        case 'PaymentMethod':
+          return $this->client->paymentMethods->create($params, $options);
+          
+        case 'Charge':
+          return $this->client->charges->create($params, $options);
+          
+        case 'Refund':
+          return $this->client->refunds->create($params, $options);
+          
+        case 'Payout':
+          return $this->client->payouts->create($params, $options);
+          
+        default:
+          throw new \Exception("Invalid Stripe resource type: $resource");
       }
-      
-      return $this->client->{$method}->create($params);
     }
     catch (\Exception $e) {
       $this->logger->error('Error creating @resource: @message', [
@@ -156,13 +185,15 @@ class StripeApiService {
    *   The resource ID.
    * @param array $params
    *   Optional parameters.
+   * @param array $options
+   *   Additional options for the request, e.g., ['stripe_account' => 'acct_123'].
    *
    * @return object
    *   The Stripe resource or a mock object in test mode.
    *
    * @throws \Exception
    */
-  public function retrieve($resource, $id, array $params = []) {
+  public function retrieve($resource, $id, array $params = [], array $options = []) {
     // If we're in test mode, return mock data
     if ($this->testMode) {
       return $this->retrieveMockResource($resource, $id, $params);
@@ -174,14 +205,38 @@ class StripeApiService {
     }
     
     try {
-      $method = lcfirst($resource) . 's';
-      
-      // Make sure the method exists on the client
-      if (!isset($this->client->{$method})) {
-        throw new \Exception("Invalid Stripe resource type: $resource");
+      // Convert the resource name to the appropriate method name based on the Stripe API structure
+      switch ($resource) {
+        case 'Account':
+          return $this->client->accounts->retrieve($id, $params, $options);
+        
+        case 'Balance':
+          return $this->client->balance->retrieve($params, $options);
+        
+        case 'PaymentIntent':
+          return $this->client->paymentIntents->retrieve($id, $params, $options);
+          
+        case 'SetupIntent':
+          return $this->client->setupIntents->retrieve($id, $params, $options);
+          
+        case 'Customer':
+          return $this->client->customers->retrieve($id, $params, $options);
+          
+        case 'PaymentMethod':
+          return $this->client->paymentMethods->retrieve($id, $params, $options);
+          
+        case 'Charge':
+          return $this->client->charges->retrieve($id, $params, $options);
+          
+        case 'Refund':
+          return $this->client->refunds->retrieve($id, $params, $options);
+          
+        case 'Payout':
+          return $this->client->payouts->retrieve($id, $params, $options);
+          
+        default:
+          throw new \Exception("Invalid Stripe resource type: $resource");
       }
-      
-      return $this->client->{$method}->retrieve($id, $params);
     }
     catch (\Exception $e) {
       $this->logger->error('Error retrieving @resource @id: @message', [
@@ -202,13 +257,15 @@ class StripeApiService {
    *   The resource ID.
    * @param array $params
    *   The parameters to update.
+   * @param array $options
+   *   Additional options for the request, e.g., ['stripe_account' => 'acct_123'].
    *
    * @return object
    *   The updated Stripe resource or a mock object in test mode.
    *
    * @throws \Exception
    */
-  public function update($resource, $id, array $params) {
+  public function update($resource, $id, array $params, array $options = []) {
     // If we're in test mode, return mock data
     if ($this->testMode) {
       return $this->updateMockResource($resource, $id, $params);
@@ -220,14 +277,29 @@ class StripeApiService {
     }
     
     try {
-      $method = lcfirst($resource) . 's';
-      
-      // Make sure the method exists on the client
-      if (!isset($this->client->{$method})) {
-        throw new \Exception("Invalid Stripe resource type: $resource");
+      // Convert the resource name to the appropriate method name based on the Stripe API structure
+      switch ($resource) {
+        case 'Account':
+          return $this->client->accounts->update($id, $params, $options);
+        
+        case 'PaymentIntent':
+          return $this->client->paymentIntents->update($id, $params, $options);
+          
+        case 'SetupIntent':
+          return $this->client->setupIntents->update($id, $params, $options);
+          
+        case 'Customer':
+          return $this->client->customers->update($id, $params, $options);
+          
+        case 'PaymentMethod':
+          return $this->client->paymentMethods->update($id, $params, $options);
+          
+        case 'Subscription':
+          return $this->client->subscriptions->update($id, $params, $options);
+          
+        default:
+          throw new \Exception("Invalid Stripe resource type: $resource");
       }
-      
-      return $this->client->{$method}->update($id, $params);
     }
     catch (\Exception $e) {
       $this->logger->error('Error updating @resource @id: @message', [
