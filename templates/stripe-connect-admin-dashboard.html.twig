@@ -34,6 +34,54 @@
     <p>{{ 'Your marketplace is configured to allow vendors to collect payments directly. A platform fee of %fee% is automatically collected on each transaction.'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</p>
   </div>
 
+  <div class="stripe-status-overview">
+    <h3>{{ 'System Status'|t }}</h3>
+    
+    <div class="api-key-status status-item">
+      <h4>{{ 'API Key Status'|t }}</h4>
+      {% if api_key_status.status == 'valid' %}
+        <div class="status-indicator valid">
+          <span class="status-icon">✓</span>
+          <span class="status-text">{{ 'API Keys Valid'|t }}</span>
+        </div>
+        <div class="status-details">
+          {{ 'Last verified: @time'|t({'@time': api_key_status.last_checked|date('Y-m-d H:i')}) }}
+        </div>
+      {% elseif api_key_status.status == 'invalid' %}
+        <div class="status-indicator invalid">
+          <span class="status-icon">✗</span>
+          <span class="status-text">{{ 'API Keys Invalid'|t }}</span>
+        </div>
+        <div class="status-details error">
+          {{ 'Error: @error'|t({'@error': api_key_status.error}) }}
+        </div>
+      {% else %}
+        <div class="status-indicator unknown">
+          <span class="status-icon">?</span>
+          <span class="status-text">{{ 'Not Verified'|t }}</span>
+        </div>
+      {% endif %}
+      <div class="status-actions">
+        <a href="{{ path('stripe_connect_marketplace.verify_api_keys') }}" class="button button--small">{{ 'Verify API Keys'|t }}</a>
+      </div>
+    </div>
+    
+    <div class="account-status status-item">
+      <h4>{{ 'Connected Accounts Status'|t }}</h4>
+      <div class="status-details">
+        <ul>
+          <li>{{ 'Total vendors: @count'|t({'@count': vendors|length}) }}</li>
+          {% if deleted_accounts %}
+            <li class="warning">{{ 'Deleted accounts detected: @count'|t({'@count': deleted_accounts|length}) }}</li>
+          {% endif %}
+        </ul>
+      </div>
+      <div class="status-actions">
+        <a href="{{ path('stripe_connect_marketplace.verify_all_accounts') }}" class="button button--small">{{ 'Verify All Accounts'|t }}</a>
+      </div>
+    </div>
+  </div>
+
   <div class="admin-vendor-list">
     <h3>{{ 'Connected Vendors'|t }}</h3>
     
@@ -78,12 +126,61 @@
                 <a href="{{ path('stripe_connect_marketplace.view_vendor', {'user': vendor.uid}) }}" class="button button--small">{{ 'View'|t }}</a>
                 <a href="{{ path('stripe_connect_marketplace.view_vendor_payouts', {'user': vendor.uid}) }}" class="button button--small">{{ 'Payouts'|t }}</a>
               </td>
+              <td class="status">
+                {% if vendor.error is defined %}
+                  <span class="status-indicator error">{{ 'Error'|t }}</span>
+                {% elseif vendor.details_submitted %}
+                  {% if vendor.charges_enabled and vendor.payouts_enabled %}
+                    <span class="status-indicator valid">{{ 'Active'|t }}</span>
+                  {% else %}
+                    <span class="status-indicator warning">{{ 'Limited'|t }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="status-indicator pending">{{ 'Incomplete'|t }}</span>
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     {% else %}
       <p>{{ 'No vendors have connected their Stripe accounts yet.'|t }}</p>
+    {% endif %}
+    
+    {% if deleted_accounts %}
+      <div class="deleted-accounts">
+        <h3>{{ 'Deleted Stripe Accounts'|t }}</h3>
+        <p class="description">{{ 'These vendor accounts have been detected as deleted in Stripe but still exist in your system.'|t }}</p>
+        
+        <table class="deleted-accounts-table">
+          <thead>
+            <tr>
+              <th>{{ 'Vendor'|t }}</th>
+              <th>{{ 'Stripe Account'|t }}</th>
+              <th>{{ 'Detected'|t }}</th>
+              <th>{{ 'Actions'|t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for account_id, account in deleted_accounts %}
+              <tr>
+                <td>
+                  {% if account.uid %}
+                    <a href="{{ path('entity.user.canonical', {'user': account.uid}) }}">{{ account.name }}</a>
+                  {% else %}
+                    {{ 'Unknown'|t }}
+                  {% endif %}
+                </td>
+                <td>{{ account_id }}</td>
+                <td>{{ account.detected_at|date('Y-m-d H:i') }}</td>
+                <td>
+                  <a href="{{ path('stripe_connect_marketplace.view_vendor', {'user': account.uid}) }}" class="button button--small">{{ 'View'|t }}</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% endif %}
   </div>
 

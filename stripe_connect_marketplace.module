@@ -146,3 +146,109 @@ function stripe_connect_marketplace_toolbar() {
   
   return $items;
 }
+
+/**
+ * Implements hook_cron().
+ */
+function stripe_connect_marketplace_cron() {
+  // Verify API keys every 6 hours
+  $api_key_interval = 21600; // 6 hours
+  $last_key_verification = \Drupal::state()->get('stripe_connect_marketplace.last_api_verification', 0);
+  
+  if (time() - $last_key_verification >= $api_key_interval) {
+    try {
+      // Verify the API keys
+      $verification_service = \Drupal::service('stripe_connect_marketplace.api_key_verification');
+      $verification_service->verifyApiKeys();
+      
+      // Update last verification time
+      \Drupal::state()->set('stripe_connect_marketplace.last_api_verification', time());
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('stripe_connect_marketplace')->error('Error during API key verification: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  // Verify connected accounts every 12 hours (process 20 at a time)
+  $account_interval = 43200; // 12 hours
+  $last_account_verification = \Drupal::state()->get('stripe_connect_marketplace.last_account_verification', 0);
+  
+  if (time() - $last_account_verification >= $account_interval) {
+    try {
+      // Verify connected accounts
+      $account_service = \Drupal::service('stripe_connect_marketplace.account_verification');
+      $stats = $account_service->verifyVendorAccounts(20);
+      
+      // Log the results
+      if ($stats['checked'] > 0) {
+        \Drupal::logger('stripe_connect_marketplace')->info('Verified @checked vendor accounts: @updated updated, @deleted marked as deleted', [
+          '@checked' => $stats['checked'],
+          '@updated' => $stats['updated'],
+          '@deleted' => $stats['deleted'],
+        ]);
+      }
+      
+      // Update last verification time
+      \Drupal::state()->set('stripe_connect_marketplace.last_account_verification', time());
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('stripe_connect_marketplace')->error('Error during account verification: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  // Process failed operations queue
+  $queue_processor_interval = 1800; // 30 minutes
+  $last_queue_processing = \Drupal::state()->get('stripe_connect_marketplace.last_queue_processing', 0);
+  
+  if (time() - $last_queue_processing >= $queue_processor_interval) {
+    try {
+      // Process the failed operations queue
+      $failed_operations = \Drupal::service('stripe_connect_marketplace.failed_operations');
+      $stats = $failed_operations->processQueue(10);
+      
+      // Log the results if anything was processed
+      if ($stats['processed'] > 0) {
+        \Drupal::logger('stripe_connect_marketplace')->info('Processed @processed failed operations: @succeeded succeeded, @requeued requeued, @dropped dropped', [
+          '@processed' => $stats['processed'],
+          '@succeeded' => $stats['succeeded'],
+          '@requeued' => $stats['requeued'],
+          '@dropped' => $stats['dropped'],
+        ]);
+      }
+      
+      // Update last processing time
+      \Drupal::state()->set('stripe_connect_marketplace.last_queue_processing', time());
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('stripe_connect_marketplace')->error('Error processing failed operations queue: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+    }
+  }
+}
+
+/**
+ * Implements hook_mail().
+ */
+function stripe_connect_marketplace_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'api_key_failure':
+      $message['subject'] = $params['subject'];
+      $message['body'][] = $params['message'];
+      break;
+      
+    case 'account_deleted':
+      $message['subject'] = $params['subject'];
+      $message['body'][] = $params['message'];
+      break;
+      
+    case 'vendor_status_change':
+      $message['subject'] = $params['subject'];
+      $message['body'][] = $params['message'];
+      break;
+  }
+}

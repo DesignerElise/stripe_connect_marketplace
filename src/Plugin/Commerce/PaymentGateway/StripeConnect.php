@@ -152,46 +152,58 @@ class StripeConnect extends Stripe {
       throw new PaymentGatewayException('Vendor Stripe account not found.');
     }
 
-    // Prepare for the API request.
-    $stripe_payment_method_id = $payment_method->getRemoteId();
-    
-    if (empty($stripe_payment_method_id)) {
-      throw new PaymentGatewayException('The provided payment method is invalid.');
+    // Check if the vendor's Stripe account has been marked as deleted
+    $store = $order->getStore();
+    if ($store) {
+      $owner = $store->getOwner();
+      if ($owner && $owner->hasField('field_vendor_status') && 
+          $owner->get('field_vendor_status')->value === 'deleted') {
+        
+        throw new PaymentGatewayException('This vendor\'s Stripe account has been deleted or is unavailable.');
+      }
     }
-
-    $payment_amount = $payment->getAmount();
-    $amount_decimal = $payment_amount->getNumber();
-    $currency_code = strtolower($payment_amount->getCurrencyCode());
-    
-    // Calculate application fee.
-    $application_fee_percent = $this->configuration['application_fee_percent'];
-    $application_fee_amount = round($amount_decimal * $application_fee_percent / 100, 2);
-    $application_fee_amount_cents = $this->minorUnits($payment_amount->getCurrencyCode(), $application_fee_amount);
-
-    // Create a payment intent directly on the connected account.
-    $intent_array = [
-      'amount' => $this->minorUnits($payment_amount->getCurrencyCode(), $amount_decimal),
-      'currency' => $currency_code,
-      'payment_method' => $stripe_payment_method_id,
-      'confirmation_method' => 'manual',
-      'confirm' => TRUE,
-      'application_fee_amount' => $application_fee_amount_cents,
-      'metadata' => [
-        'order_id' => $order->id(),
-        'payment_id' => $payment->id(),
-      ],
-      'description' => $this->buildPaymentDescription($payment),
-    ];
-
-    // Add capture method if not immediate capture.
-    if (!$capture) {
-      $intent_array['capture_method'] = 'manual';
-    }
-
-    // Options for the connected account.
-    $options = ['stripe_account' => $vendor_account_id];
 
     try {
+      // Prepare for the API request.
+      $stripe_payment_method_id = $payment_method->getRemoteId();
+      
+      if (empty($stripe_payment_method_id)) {
+        throw new PaymentGatewayException('The provided payment method is invalid.');
+      }
+
+      $payment_amount = $payment->getAmount();
+      $amount_decimal = $payment_amount->getNumber();
+      $currency_code = strtolower($payment_amount->getCurrencyCode());
+      
+      // Calculate application fee.
+      $application_fee_percent = $this->configuration['application_fee_percent'];
+      $application_fee_amount = round($amount_decimal * $application_fee_percent / 100, 2);
+      $application_fee_amount_cents = $this->minorUnits($payment_amount->getCurrencyCode(), $application_fee_amount);
+
+      // Create a payment intent directly on the connected account.
+      $intent_array = [
+        'amount' => $this->minorUnits($payment_amount->getCurrencyCode(), $amount_decimal),
+        'currency' => $currency_code,
+        'payment_method' => $stripe_payment_method_id,
+        'confirmation_method' => 'manual',
+        'confirm' => TRUE,
+        'application_fee_amount' => $application_fee_amount_cents,
+        'metadata' => [
+          'order_id' => $order->id(),
+          'payment_id' => $payment->id(),
+        ],
+        'description' => $this->buildPaymentDescription($payment),
+      ];
+
+      // Add capture method if not immediate capture.
+      if (!$capture) {
+        $intent_array['capture_method'] = 'manual';
+      }
+
+      // Options for the connected account.
+      $options = ['stripe_account' => $vendor_account_id];
+
+      // Create the payment intent on the connected account
       $intent = $this->stripeApi->create('PaymentIntent', $intent_array, $options);
       
       // Update various payment properties based on the intent.
@@ -215,8 +227,73 @@ class StripeConnect extends Stripe {
         throw new PaymentGatewayException('Invalid payment state: ' . $intent->status);
       }
     }
+    catch (\Drupal\stripe_connect_marketplace\Exception\StripeAccountDeletedException $e) {
+      // Update the vendor's status if not already marked as deleted
+      if ($store && $owner && $owner->hasField('field_vendor_status') && 
+          $owner->get('field_vendor_status')->value !== 'deleted') {
+        
+        $owner->set('field_vendor_status', 'deleted');
+        $owner->save();
+        
+        $this->logger->warning('Vendor Stripe account @account_id has been deleted. Updated status for vendor @uid.', [
+          '@account_id' => $vendor_account_id,
+          '@uid' => $owner->id(),
+        ]);
+      }
+      
+      // Queue this operation for retry if the vendor gets reconnected
+      \Drupal::service('stripe_connect_marketplace.failed_operations')
+        ->queueFailedOperation('payment', [
+          'payment_id' => $payment->id(),
+          'order_id' => $order->id(),
+          'amount' => $amount_decimal,
+          'currency' => $currency_code,
+          'capture' => $capture,
+        ], $e->getMessage());
+      
+      throw new PaymentGatewayException('This vendor\'s Stripe account has been deleted or is unavailable.', 0, $e);
+    }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error($e->getMessage());
+      // Add error context to our log
+      $error_data = [
+        'message' => $e->getMessage(),
+        'order_id' => $order->id(),
+        'payment_id' => $payment->id(),
+        'vendor_account_id' => $vendor_account_id,
+      ];
+      
+      $this->logger->error('Stripe API Error during payment creation: @message. Order: @order, Payment: @payment, Vendor: @vendor', [
+        '@message' => $e->getMessage(),
+        '@order' => $order->id(),
+        '@payment' => $payment->id(),
+        '@vendor' => $vendor_account_id,
+      ]);
+      
+      // Check if this is a temporary network/server error that should be retried
+      $should_retry = false;
+      if ($e instanceof \Stripe\Exception\ApiConnectionException ||  // Network error
+          $e instanceof \Stripe\Exception\RateLimitException ||      // Too many requests
+          $e instanceof \Stripe\Exception\ServiceUnavailableException || // Stripe is down
+          $e instanceof \Stripe\Exception\ServerException) {         // Stripe server error
+        
+        $should_retry = true;
+      }
+      
+      if ($should_retry) {
+        // Queue this operation for retry
+        \Drupal::service('stripe_connect_marketplace.failed_operations')
+          ->queueFailedOperation('payment', [
+            'payment_id' => $payment->id(),
+            'order_id' => $order->id(),
+            'amount' => $amount_decimal,
+            'currency' => $currency_code,
+            'capture' => $capture,
+          ], $e->getMessage());
+        
+        throw new PaymentGatewayException('Payment processing temporarily unavailable. Your payment will be processed automatically when the service is back online.', 0, $e);
+      }
+      
+      // For other errors, just pass through the exception
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
     }
   }

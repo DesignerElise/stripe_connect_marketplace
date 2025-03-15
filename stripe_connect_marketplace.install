@@ -16,22 +16,29 @@ function stripe_connect_marketplace_requirements($phase) {
   $requirements = [];
 
   if ($phase == 'install' || $phase == 'runtime') {
-    // Check for Commerce Stripe module.
-    if (!\Drupal::moduleHandler()->moduleExists('commerce_stripe')) {
-      $requirements['stripe_connect_marketplace_commerce_stripe'] = [
-        'title' => t('Commerce Stripe'),
-        'description' => t('Stripe Connect Marketplace requires the Commerce Stripe module to be installed and enabled.'),
-        'severity' => REQUIREMENT_ERROR,
-      ];
-    }
+    
+    $required_modules = [
+      'commerce' => 'Commerce',
+      'commerce_payment' => 'Commerce Payment',
+      'commerce_order' => 'Commerce Order',
+      'commerce_stripe' => 'Commerce Stripe',
+      'commerce_store' => 'Commerce Store',
+      'commerce_product' => 'Commerce Product',
+      'commerce_cart' => 'Commerce Cart',
+      'commerce_checkout' => 'Commerce Checkout',
+      'commerce_log' => 'Commerce Log',
+      'commerce_tax' => 'Commerce Tax',
+    ];
 
-    // Check for Commerce module.
-    if (!\Drupal::moduleHandler()->moduleExists('commerce')) {
-      $requirements['stripe_connect_marketplace_commerce'] = [
-        'title' => t('Commerce'),
-        'description' => t('Stripe Connect Marketplace requires the Commerce module to be installed and enabled.'),
-        'severity' => REQUIREMENT_ERROR,
-      ];
+    // Check each required module
+    foreach ($required_modules as $module => $name) {
+      if (!\Drupal::moduleHandler()->moduleExists($module)) {
+        $requirements['stripe_connect_marketplace_' . $module] = [
+          'title' => $name,
+          'description' => t('@module is required for Stripe Connect Marketplace to function properly.', ['@module' => $name]),
+          'severity' => REQUIREMENT_ERROR,
+        ];
+      }
     }
 
     // Check for required PHP extensions.
@@ -192,6 +199,7 @@ function _stripe_connect_marketplace_create_vendor_status_field() {
           'active' => 'Active',
           'inactive' => 'Inactive',
           'suspended' => 'Suspended',
+          'deleted' => 'Deleted', // Add the deleted status
         ],
       ],
       'cardinality' => 1,
@@ -231,6 +239,40 @@ function _stripe_connect_marketplace_create_vendor_status_field() {
       'label' => 'above',
     ]);
     $view_display->save();
+  }
+  else {
+    // Field exists, check if we need to add the 'deleted' status
+    $allowed_values = $field_storage->getSetting('allowed_values');
+    if (!isset($allowed_values['deleted'])) {
+      $allowed_values['deleted'] = 'Deleted';
+      $field_storage->setSetting('allowed_values', $allowed_values);
+      $field_storage->save();
+      
+      \Drupal::logger('stripe_connect_marketplace')->notice('Added "deleted" status to vendor status field.');
+    }
+  }
+}
+
+/**
+ * Update vendor status field to add 'deleted' status.
+ */
+function stripe_connect_marketplace_update_8002() {
+  $field_storage = FieldStorageConfig::loadByName('user', 'field_vendor_status');
+  if ($field_storage) {
+    $allowed_values = $field_storage->getSetting('allowed_values');
+    if (!isset($allowed_values['deleted'])) {
+      $allowed_values['deleted'] = 'Deleted';
+      $field_storage->setSetting('allowed_values', $allowed_values);
+      $field_storage->save();
+      
+      return t('Added "deleted" status to vendor status field.');
+    }
+    else {
+      return t('Vendor status field already includes "deleted" status.');
+    }
+  }
+  else {
+    return t('Vendor status field not found.');
   }
 }
 

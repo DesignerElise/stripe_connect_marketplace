@@ -1,10 +1,45 @@
 services:
+  stripe_connect_marketplace.account_verification:
+    class: Drupal\stripe_connect_marketplace\Service\AccountVerificationService
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@state'
+      - '@stripe_connect_marketplace.api'
+      
+  stripe_connect_marketplace.account_deletion_subscriber:
+    class: Drupal\stripe_connect_marketplace\EventSubscriber\AccountDeletionSubscriber
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@messenger'
+      - '@stripe_connect_marketplace.account_verification'
+    tags:
+      - { name: event_subscriber }
+      
   stripe_connect_marketplace.api:
     class: Drupal\stripe_connect_marketplace\StripeApiService
     arguments:
       - '@config.factory'
       - '@logger.factory'
 
+  stripe_connect_marketplace.api_key_verification:
+    class: Drupal\stripe_connect_marketplace\Service\ApiKeyVerificationService
+    arguments:
+      - '@config.factory'
+      - '@stripe_connect_marketplace.api'
+      - '@state'
+      - '@logger.factory'
+      - '@plugin.manager.mail'
+      - '@entity_type.manager'
+
+  stripe_connect_marketplace.failed_operations:
+    class: Drupal\stripe_connect_marketplace\Service\FailedOperationsService
+    arguments:
+      - '@queue'
+      - '@state'
+      - '@logger.factory'
+      
   stripe_connect_marketplace.payment_service:
     class: Drupal\stripe_connect_marketplace\Service\PaymentService
     arguments:

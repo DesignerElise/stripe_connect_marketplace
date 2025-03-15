@@ -340,98 +340,145 @@ class ConnectController extends ControllerBase {
       // Get the Stripe account ID
       $account_id = $user->get('field_stripe_account_id')->value;
       
+      // Check if the vendor status is marked as 'deleted'
+      if ($user->hasField('field_vendor_status') && $user->get('field_vendor_status')->value == 'deleted') {
+        $this->messenger()->addError($this->t('Your Stripe account appears to have been deleted or is no longer accessible. Please contact the marketplace administrator.'));
+        return [
+          '#markup' => $this->t('
+            <div class="account-deleted-message">
+              <h2>@title</h2>
+              <p>@message</p>
+              <p>@help</p>
+            </div>', 
+            [
+              '@title' => $this->t('Stripe Account No Longer Available'),
+              '@message' => $this->t('Your Stripe Connect account is no longer available. This could happen if you deleted your account directly through Stripe.'),
+              '@help' => $this->t('To resume vendor operations, please contact the site administrator to set up a new account.'),
+            ]
+          ),
+        ];
+      }
+      
       // Get config
       $config = $this->configFactory->get('stripe_connect_marketplace.settings');
       
       // Prepare options for connected account operations
       $options = ['stripe_account' => $account_id];
       
-      // Retrieve the account using the StripeApi service
-      $account = $this->stripeApi->retrieve('Account', $account_id);
-      
-      // Get recent payouts
-      $payouts = $this->payoutService->getVendorPayouts($account_id, 10);
-      
-      // Get balance
-      $balance = $this->stripeApi->retrieve('Balance', null, [], $options);
-      
-      // Format balance data
-      $available_balance = [];
-      foreach ($balance->available as $amount) {
-        $available_balance[] = [
-          'amount' => $amount->amount / 100,
-          'currency' => strtoupper($amount->currency),
-        ];
-      }
-      
-      $pending_balance = [];
-      foreach ($balance->pending as $amount) {
-        $pending_balance[] = [
-          'amount' => $amount->amount / 100,
-          'currency' => strtoupper($amount->currency),
-        ];
-      }
-      
-      // Get link to Stripe dashboard
-      // First, check if the account has completed onboarding
-      if ($account->details_submitted && $account->charges_enabled) {
-        // Account has completed onboarding, create a login link
-        try {
-          $dashboard_link = $this->stripeApi->create('LoginLink', [
-            'account' => $account_id,
-          ]);
-          
-          $dashboard_url = $dashboard_link->url;
-        } 
-        catch (\Exception $e) {
-          $this->logger->error('Error creating dashboard link: @message', ['@message' => $e->getMessage()]);
-          $dashboard_url = null;
+      try {
+        // Retrieve the account using the StripeApi service
+        $account = $this->stripeApi->retrieve('Account', $account_id);
+        
+        // Get recent payouts
+        $payouts = $this->payoutService->getVendorPayouts($account_id, 10);
+        
+        // Get balance
+        $balance = $this->stripeApi->retrieve('Balance', null, [], $options);
+        
+        // Format balance data
+        $available_balance = [];
+        foreach ($balance->available as $amount) {
+          $available_balance[] = [
+            'amount' => $amount->amount / 100,
+            'currency' => strtoupper($amount->currency),
+          ];
         }
-      } else {
-        // Account has not completed onboarding, create an onboarding link
-        try {
-          $refresh_url = Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')
-            ->setAbsolute()
-            ->toString();
+        
+        $pending_balance = [];
+        foreach ($balance->pending as $amount) {
+          $pending_balance[] = [
+            'amount' => $amount->amount / 100,
+            'currency' => strtoupper($amount->currency),
+          ];
+        }
+        
+        // Get appropriate link based on account status
+        if ($account->details_submitted && $account->charges_enabled) {
+          // Create login link for complete accounts
+          try {
+            $dashboard_link = $this->stripeApi->create('LoginLink', [
+              'account' => $account_id,
+            ]);
+            $dashboard_url = $dashboard_link->url;
+          }
+          catch (\Exception $e) {
+            $this->logger->error('Error creating dashboard link: @message', ['@message' => $e->getMessage()]);
+            $dashboard_url = null;
+          }
+        }
+        else {
+          // Create onboarding link for incomplete accounts
+          try {
+            $refresh_url = Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')
+              ->setAbsolute()
+              ->toString();
+              
+            $return_url = Url::fromRoute('stripe_connect_marketplace.onboard_complete')
+              ->setAbsolute()
+              ->toString();
             
-          $return_url = Url::fromRoute('stripe_connect_marketplace.onboard_complete')
-            ->setAbsolute()
-            ->toString();
-          
-          $onboarding_link = $this->stripeApi->create('AccountLink', [
-            'account' => $account_id,
-            'refresh_url' => $refresh_url,
-            'return_url' => $return_url,
-            'type' => 'account_onboarding',
-          ]);
-          
-          $dashboard_url = $onboarding_link->url;
+            $onboarding_link = $this->stripeApi->create('AccountLink', [
+              'account' => $account_id,
+              'refresh_url' => $refresh_url,
+              'return_url' => $return_url,
+              'type' => 'account_onboarding',
+            ]);
+            
+            $dashboard_url = $onboarding_link->url;
+          }
+          catch (\Exception $e) {
+            $this->logger->error('Error creating onboarding link: @message', ['@message' => $e->getMessage()]);
+            $dashboard_url = null;
+          }
         }
-        catch (\Exception $e) {
-          $this->logger->error('Error creating onboarding link: @message', ['@message' => $e->getMessage()]);
-          $dashboard_url = null;
-        }
+        
+        return [
+          '#theme' => 'stripe_connect_vendor_dashboard',
+          '#account' => [
+            'id' => $account->id,
+            'charges_enabled' => $account->charges_enabled,
+            'payouts_enabled' => $account->payouts_enabled,
+            'details_submitted' => $account->details_submitted,
+            'dashboard_url' => $dashboard_url,
+          ],
+          '#balance' => [
+            'available' => $available_balance,
+            'pending' => $pending_balance,
+          ],
+          '#payouts' => $payouts->data,
+          '#user' => $user,
+          '#stripe_connect' => [
+            'application_fee_percent' => $config->get('stripe_connect.application_fee_percent'),
+          ],
+        ];
       }
-      
-      return [
-        '#theme' => 'stripe_connect_vendor_dashboard',
-        '#account' => [
-          'id' => $account->id,
-          'charges_enabled' => $account->charges_enabled,
-          'payouts_enabled' => $account->payouts_enabled,
-          'details_submitted' => $account->details_submitted,
-          'dashboard_url' => $dashboard_url,
-        ],
-        '#balance' => [
-          'available' => $available_balance,
-          'pending' => $pending_balance,
-        ],
-        '#payouts' => $payouts->data,
-        '#user' => $user,
-        '#stripe_connect' => [
-          'application_fee_percent' => $config->get('stripe_connect.application_fee_percent'),
-        ],
-      ];
+      catch (\Drupal\stripe_connect_marketplace\Exception\StripeAccountDeletedException $e) {
+        // Account was deleted, update the vendor status
+        if ($user->hasField('field_vendor_status')) {
+          $user->set('field_vendor_status', 'deleted');
+          $user->save();
+          
+          $this->logger->warning('Vendor dashboard: Stripe account @account_id has been deleted. Updated status.', [
+            '@account_id' => $account_id,
+          ]);
+        }
+        
+        $this->messenger()->addError($this->t('Your Stripe account appears to have been deleted or is no longer accessible. Please contact the marketplace administrator.'));
+        return [
+          '#markup' => $this->t('
+            <div class="account-deleted-message">
+              <h2>@title</h2>
+              <p>@message</p>
+              <p>@help</p>
+            </div>', 
+            [
+              '@title' => $this->t('Stripe Account No Longer Available'),
+              '@message' => $this->t('Your Stripe Connect account is no longer available. This could happen if you deleted your account directly through Stripe.'),
+              '@help' => $this->t('To resume vendor operations, please contact the site administrator to set up a new account.'),
+            ]
+          ),
+        ];
+      }
     }
     catch (\Exception $e) {
       $this->logger->error('Error displaying vendor dashboard: @message', ['@message' => $e->getMessage()]);
@@ -664,6 +711,25 @@ class ConnectController extends ControllerBase {
       foreach ($users as $user) {
         $account_id = $user->get('field_stripe_account_id')->value;
         
+        // If vendor status is 'deleted', don't try to fetch from Stripe
+        $vendor_deleted = ($user->hasField('field_vendor_status') && 
+                          $user->get('field_vendor_status')->value === 'deleted');
+        
+        if ($vendor_deleted) {
+          $vendors[] = [
+            'uid' => $user->id(),
+            'name' => $user->getDisplayName(),
+            'email' => $user->getEmail(),
+            'account_id' => $account_id,
+            'charges_enabled' => FALSE,
+            'payouts_enabled' => FALSE,
+            'details_submitted' => FALSE,
+            'created' => 0,
+            'status' => 'deleted',
+          ];
+          continue;
+        }
+        
         try {
           // Retrieve the account
           $account = $this->stripeApi->retrieve('Account', $account_id);
@@ -677,6 +743,27 @@ class ConnectController extends ControllerBase {
             'payouts_enabled' => $account->payouts_enabled,
             'details_submitted' => $account->details_submitted,
             'created' => $account->created,
+          ];
+        }
+        catch (\Drupal\stripe_connect_marketplace\Exception\StripeAccountDeletedException $e) {
+          // Mark account as deleted
+          if ($user->hasField('field_vendor_status')) {
+            $user->set('field_vendor_status', 'deleted');
+            $user->save();
+            
+            $this->logger->warning('Admin dashboard: Detected deleted Stripe account @account_id for user @uid', [
+              '@account_id' => $account_id,
+              '@uid' => $user->id(),
+            ]);
+          }
+          
+          $vendors[] = [
+            'uid' => $user->id(),
+            'name' => $user->getDisplayName(),
+            'email' => $user->getEmail(),
+            'account_id' => $account_id,
+            'status' => 'deleted',
+            'error' => $this->t('Account has been deleted in Stripe'),
           ];
         }
         catch (\Exception $e) {
@@ -722,6 +809,15 @@ class ConnectController extends ControllerBase {
       // Get application fee percentage for the template
       $app_fee_percent = $config->get('stripe_connect.application_fee_percent');
       
+      // Get API key status
+      $api_key_status = \Drupal::state()->get('stripe_connect_marketplace.api_key_status', [
+        'status' => 'unknown',
+        'last_checked' => 0,
+      ]);
+      
+      // Get deleted accounts tracking
+      $deleted_accounts = \Drupal::state()->get('stripe_connect_marketplace.deleted_accounts', []);
+      
       return [
         '#theme' => 'stripe_connect_admin_dashboard',
         '#vendors' => $vendors,
@@ -731,6 +827,8 @@ class ConnectController extends ControllerBase {
         ],
         '#payouts' => $payouts->data,
         '#environment' => $environment,
+        '#api_key_status' => $api_key_status,
+        '#deleted_accounts' => $deleted_accounts,
         '#config' => [
           'stripe_connect' => [
             'application_fee_percent' => $app_fee_percent,

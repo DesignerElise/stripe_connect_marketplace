@@ -8,6 +8,26 @@ stripe_connect_marketplace.settings:
   options:
     _admin_route: TRUE
 
+stripe_connect_marketplace.verify_api_keys:
+  path: '/admin/commerce/stripe-connect/verify-api-keys'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\AdminActionsController::verifyApiKeys'
+    _title: 'Verify Stripe API Keys'
+  requirements:
+    _permission: 'administer stripe connect'
+  options:
+    _admin_route: TRUE
+
+stripe_connect_marketplace.verify_all_accounts:
+  path: '/admin/commerce/stripe-connect/verify-all-accounts'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\AdminActionsController::verifyAllAccounts'
+    _title: 'Verify All Stripe Connect Accounts'
+  requirements:
+    _permission: 'administer stripe connect'
+  options:
+    _admin_route: TRUE
+    
 stripe_connect_marketplace.webhook:
   path: '/stripe/webhook'
   defaults:

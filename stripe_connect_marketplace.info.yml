@@ -9,5 +9,11 @@ dependencies:
   - drupal:commerce
   - drupal:commerce_payment
   - drupal:commerce_order
+  - drupal:commerce_store
+  - drupal:commerce_product
+  - drupal:commerce_cart
+  - drupal:commerce_checkout
+  - drupal:commerce_log
+  - drupal:commerce_tax
   - commerce_stripe:commerce_stripe
   - drupal:config
