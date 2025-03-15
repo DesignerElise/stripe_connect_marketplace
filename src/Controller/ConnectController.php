@@ -373,9 +373,45 @@ class ConnectController extends ControllerBase {
       }
       
       // Get link to Stripe dashboard
-      $dashboard_link = $this->stripeApi->create('LoginLink', [
-        'account' => $account_id,
-      ]);
+      // First, check if the account has completed onboarding
+      if ($account->details_submitted && $account->charges_enabled) {
+        // Account has completed onboarding, create a login link
+        try {
+          $dashboard_link = $this->stripeApi->create('LoginLink', [
+            'account' => $account_id,
+          ]);
+          
+          $dashboard_url = $dashboard_link->url;
+        } 
+        catch (\Exception $e) {
+          $this->logger->error('Error creating dashboard link: @message', ['@message' => $e->getMessage()]);
+          $dashboard_url = null;
+        }
+      } else {
+        // Account has not completed onboarding, create an onboarding link
+        try {
+          $refresh_url = Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')
+            ->setAbsolute()
+            ->toString();
+            
+          $return_url = Url::fromRoute('stripe_connect_marketplace.onboard_complete')
+            ->setAbsolute()
+            ->toString();
+          
+          $onboarding_link = $this->stripeApi->create('AccountLink', [
+            'account' => $account_id,
+            'refresh_url' => $refresh_url,
+            'return_url' => $return_url,
+            'type' => 'account_onboarding',
+          ]);
+          
+          $dashboard_url = $onboarding_link->url;
+        }
+        catch (\Exception $e) {
+          $this->logger->error('Error creating onboarding link: @message', ['@message' => $e->getMessage()]);
+          $dashboard_url = null;
+        }
+      }
       
       return [
         '#theme' => 'stripe_connect_vendor_dashboard',
@@ -384,7 +420,7 @@ class ConnectController extends ControllerBase {
           'charges_enabled' => $account->charges_enabled,
           'payouts_enabled' => $account->payouts_enabled,
           'details_submitted' => $account->details_submitted,
-          'dashboard_url' => $dashboard_link->url,
+          'dashboard_url' => $dashboard_url,
         ],
         '#balance' => [
           'available' => $available_balance,
