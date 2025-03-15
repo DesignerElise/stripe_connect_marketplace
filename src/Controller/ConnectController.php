@@ -140,8 +140,41 @@ class ConnectController extends ControllerBase {
       
       // Check if user already has a Stripe account
       if ($user->hasField('field_stripe_account_id') && !$user->get('field_stripe_account_id')->isEmpty()) {
-        $this->messenger()->addWarning($this->t('You already have a Stripe account connected.'));
-        return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->toString());
+        $account_id = $user->get('field_stripe_account_id')->value;
+        
+        // Check if onboarding is complete
+        try {
+          $account = $this->stripeApi->retrieve('Account', $account_id);
+          
+          // If onboarding is complete, redirect to dashboard
+          if ($account->details_submitted && $account->charges_enabled && $account->payouts_enabled) {
+            $this->messenger()->addWarning($this->t('Your Stripe account is already fully set up.'));
+            return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->toString());
+          }
+          
+          // Otherwise, continue with onboarding by creating a new account link
+          $refresh_url = Url::fromRoute('stripe_connect_marketplace.onboard_vendor')
+            ->setAbsolute()
+            ->toString();
+            
+          $return_url = Url::fromRoute('stripe_connect_marketplace.onboard_complete')
+            ->setAbsolute()
+            ->toString();
+          
+          // Create an account link for continuing onboarding
+          $account_link = $this->stripeApi->create('AccountLink', [
+            'account' => $account_id,
+            'refresh_url' => $refresh_url,
+            'return_url' => $return_url,
+            'type' => 'account_onboarding',
+          ]);
+          
+          // Redirect to Stripe hosted onboarding page
+          return new TrustedRedirectResponse($account_link->url);
+        }
+        catch (\Exception $e) {
+          $this->logger->error('Error checking Stripe account status: @message', ['@message' => $e->getMessage()]);
+        }
       }
       
       // Get the user's email
@@ -340,11 +373,8 @@ class ConnectController extends ControllerBase {
       }
       
       // Get link to Stripe dashboard
-      $dashboard_link = $this->stripeApi->create('AccountLink', [
+      $dashboard_link = $this->stripeApi->create('LoginLink', [
         'account' => $account_id,
-        'refresh_url' => Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->setAbsolute()->toString(),
-        'return_url' => Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->setAbsolute()->toString(),
-        'type' => 'account_onboarding',
       ]);
       
       return [

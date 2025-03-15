@@ -139,6 +139,19 @@ class StripeApiService {
         case 'AccountLink':
           return $this->client->accountLinks->create($params, $options);
         
+        case 'LoginLink':
+          // LoginLink requires the account ID to be in the parameters
+          if (!isset($params['account'])) {
+            throw new \Exception('Account ID is required for creating a LoginLink');
+          }
+          
+          // Extract the account ID and remove it from params
+          $account_id = $params['account'];
+          unset($params['account']);
+          
+          // Create the login link for the specified account
+          return $this->client->accounts->createLoginLink($account_id, $params, $options);
+        
         case 'PaymentIntent':
           return $this->client->paymentIntents->create($params, $options);
           
@@ -373,7 +386,13 @@ class StripeApiService {
         $mock->expires_at = time() + 3600;
         $mock->url = 'https://connect.stripe.com/mock/acct_link/' . md5(uniqid('', TRUE));
         break;
-        
+      
+      case 'LoginLink':
+        $mock->object = 'login_link';
+        $mock->created = time();
+        $mock->url = 'https://dashboard.stripe.com/test/connect/mock/login/' . md5(uniqid('', TRUE));
+        break;  
+
       case 'PaymentIntent':
         $mock->id = 'pi_' . md5(uniqid('', TRUE));
         $mock->object = 'payment_intent';
