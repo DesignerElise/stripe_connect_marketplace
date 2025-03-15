@@ -1,18 +1,222 @@
+{#
+/**
+ * @file
+ * Template for displaying Stripe Connect vendor terms and conditions.
+ *
+ * Available variables:
+ * - terms: Array of terms information.
+ *   - marketplace_name: The name of the marketplace.
+ *   - stripe_connect_description: Basic description of Stripe Connect.
+ *   - key_terms: Array of key terms items.
+ *   - payout_description: Description of payout process.
+ *   - liability_disclaimer: Liability disclaimer text.
+ * - stripe_connect: Stripe Connect configuration including application_fee_percent.
+ */
+#}
+
 <div class="stripe-connect-vendor-terms">
-    <h1>{{ 'Vendor Terms and Conditions for ' ~ marketplace_name }}</h1>
-    
-    <p>{{ stripe_connect_description }}</p>
-    
-    <h2>Key Terms</h2>
-    <ul>
-      {% for term in key_terms %}
-        <li>{{ term }}</li>
-      {% endfor %}
-    </ul>
-    
-    <h2>Payouts</h2>
-    <p>{{ payout_description }}</p>
-    
-    <h2>Liability</h2>
-    <p>{{ liability_disclaimer }}</p>
+  <div class="terms-header">
+    <h1>{{ 'Vendor Terms and Conditions'|t }}</h1>
+    <h2>{{ terms.marketplace_name }}</h2>
   </div>
+  
+  <div class="terms-content">
+    <div class="terms-section introduction">
+      <h3>{{ 'Introduction'|t }}</h3>
+      <p>{{ 'Welcome to our marketplace. These terms govern your participation as a vendor on our platform using Stripe Connect for payment processing.'|t }}</p>
+      <p>{{ terms.stripe_connect_description }}</p>
+      
+      <div class="direct-charges-info">
+        <h4>{{ 'Direct Charges Payment Model'|t }}</h4>
+        <p>{{ 'This marketplace uses Stripe Connect\'s Direct Charges model where:'|t }}</p>
+        <ul>
+          <li>{{ 'You collect payments directly through your Stripe Connect account'|t }}</li>
+          <li>{{ 'Our platform automatically collects a %fee% application fee on each transaction'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</li>
+          <li>{{ 'You receive payouts directly from Stripe based on your payout schedule'|t }}</li>
+        </ul>
+      </div>
+    </div>
+    
+    <div class="terms-section eligibility">
+      <h3>{{ 'Eligibility'|t }}</h3>
+      <p>{{ 'To become a vendor on our platform, you must:'|t }}</p>
+      <ul>
+        <li>{{ 'Be at least 18 years old or the legal age of majority in your jurisdiction'|t }}</li>
+        <li>{{ 'Have a valid email address and maintain accurate contact information'|t }}</li>
+        <li>{{ 'Complete the Stripe Connect onboarding process successfully'|t }}</li>
+        <li>{{ 'Comply with Stripe\'s Terms of Service and all applicable laws'|t }}</li>
+        <li>{{ 'Provide accurate business information and keep it updated'|t }}</li>
+      </ul>
+    </div>
+    
+    <div class="terms-section account-setup">
+      <h3>{{ 'Stripe Connect Account Setup'|t }}</h3>
+      <p>{{ 'As part of becoming a vendor, you agree to:'|t }}</p>
+      <ul>
+        <li>{{ 'Create a Stripe Connect account through our platform'|t }}</li>
+        <li>{{ 'Provide all required information for identity verification'|t }}</li>
+        <li>{{ 'Complete the Stripe onboarding process to enable payments and payouts'|t }}</li>
+        <li>{{ 'Maintain your Stripe account in good standing'|t }}</li>
+        <li>{{ 'Keep your banking information accurate and up-to-date'|t }}</li>
+      </ul>
+      <p>{{ 'Our platform helps you initiate this process, but you must complete it directly with Stripe.'|t }}</p>
+    </div>
+    
+    <div class="terms-section fees">
+      <h3>{{ 'Platform Fees'|t }}</h3>
+      <p>{{ 'By agreeing to these terms, you acknowledge and accept the following fee structure:'|t }}</p>
+      <ul>
+        <li>{{ 'Our platform will automatically collect a %fee% fee on each transaction'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</li>
+        <li>{{ 'This fee is calculated as a percentage of the total transaction amount'|t }}</li>
+        <li>{{ 'Stripe will also charge its standard processing fees directly to your account'|t }}</li>
+        <li>{{ 'You will receive the remainder of the payment after platform and Stripe fees'|t }}</li>
+      </ul>
+      <p>{{ 'Example: For a $100.00 transaction, our platform will collect $%platform_fee%.00, Stripe will collect their processing fee, and the remainder will be available in your Stripe balance.'|t({'%platform_fee%': stripe_connect.application_fee_percent}) }}</p>
+    </div>
+    
+    <div class="terms-section payment-processing">
+      <h3>{{ 'Payment Processing'|t }}</h3>
+      <p>{{ 'Regarding payment processing, you understand and agree that:'|t }}</p>
+      <ul>
+        <li>{{ 'Customer payments for your products or services will be processed directly through your Stripe Connect account'|t }}</li>
+        <li>{{ 'You are responsible for handling customer disputes and chargebacks'|t }}</li>
+        <li>{{ 'You must maintain sufficient funds in your account to cover potential refunds and chargebacks'|t }}</li>
+        <li>{{ 'Our platform is not responsible for payment issues between you and your customers'|t }}</li>
+      </ul>
+    </div>
+    
+    <div class="terms-section payouts">
+      <h3>{{ 'Payouts'|t }}</h3>
+      <p>{{ terms.payout_description }}</p>
+      <ul>
+        <li>{{ 'Payouts will be sent directly from Stripe to your bank account'|t }}</li>
+        <li>{{ 'Payout frequency is determined by your Stripe account settings'|t }}</li>
+        <li>{{ 'Payout timing depends on your bank and your Stripe account status'|t }}</li>
+        <li>{{ 'You can view and manage your payouts in your Stripe Dashboard'|t }}</li>
+      </ul>
+      <p>{{ 'With direct charges, our platform does not handle your funds. Stripe manages all payouts directly to your account.'|t }}</p>
+    </div>
+    
+    <div class="terms-section key-terms">
+      <h3>{{ 'Additional Key Terms'|t }}</h3>
+      <ul>
+        {% for item in terms.key_terms %}
+          <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    
+    <div class="terms-section tax-responsibility">
+      <h3>{{ 'Tax Responsibility'|t }}</h3>
+      <p>{{ 'You are solely responsible for:'|t }}</p>
+      <ul>
+        <li>{{ 'Determining and paying all applicable taxes on your sales'|t }}</li>
+        <li>{{ 'Collecting and remitting any required sales tax'|t }}</li>
+        <li>{{ 'Filing all required tax returns and forms'|t }}</li>
+        <li>{{ 'Complying with tax laws in all jurisdictions where you operate'|t }}</li>
+      </ul>
+      <p>{{ 'Our platform does not provide tax advice. Please consult with a tax professional for guidance.'|t }}</p>
+    </div>
+    
+    <div class="terms-section account-termination">
+      <h3>{{ 'Account Termination'|t }}</h3>
+      <p>{{ 'Either party may terminate this vendor relationship at any time:'|t }}</p>
+      <ul>
+        <li>{{ 'You may disconnect your Stripe Connect account from our platform'|t }}</li>
+        <li>{{ 'We may deactivate your vendor account for violations of these terms'|t }}</li>
+        <li>{{ 'Stripe may suspend or terminate your Stripe account according to their terms'|t }}</li>
+      </ul>
+      <p>{{ 'Upon termination, you will retain access to your Stripe account, but will no longer be able to sell on our platform.'|t }}</p>
+    </div>
+    
+    <div class="terms-section liability">
+      <h3>{{ 'Limitation of Liability'|t }}</h3>
+      <p>{{ terms.liability_disclaimer }}</p>
+      <p>{{ 'In the direct charges model, our platform serves as a connection point between you and your customers but does not directly handle payment processing or funds. We are not responsible for payment disputes, chargebacks, or other issues related to transactions processed through your Stripe Connect account.'|t }}</p>
+    </div>
+  </div>
+  
+  <div class="terms-agreement">
+    <h3>{{ 'Agreement'|t }}</h3>
+    <p>{{ 'By becoming a vendor on our platform, you agree to these Vendor Terms and Conditions, as well as our general Terms of Service and Privacy Policy. You also agree to the Stripe Connected Account Agreement, which is between you and Stripe.'|t }}</p>
+    <p>{{ 'Last updated: '|t }} {{ "now"|date("F j, Y") }}</p>
+  </div>
+</div>
+
+<style>
+.stripe-connect-vendor-terms {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  color: #333;
+}
+
+.terms-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.terms-header h1 {
+  color: #6772e5;
+  margin-bottom: 10px;
+}
+
+.terms-section {
+  margin-bottom: 30px;
+}
+
+.terms-section h3 {
+  color: #6772e5;
+  margin-top: 20px;
+  margin-bottom: 15px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.terms-section ul {
+  padding-left: 25px;
+}
+
+.terms-section li {
+  margin-bottom: 10px;
+}
+
+.direct-charges-info {
+  background-color: #f7f9fc;
+  padding: 15px 20px;
+  border-radius: 4px;
+  margin: 20px 0;
+  border-left: 4px solid #6772e5;
+}
+
+.direct-charges-info h4 {
+  margin-top: 0;
+  color: #6772e5;
+}
+
+.direct-charges-info ul {
+  margin-bottom: 0;
+}
+
+.terms-agreement {
+  background-color: #f7f9fc;
+  padding: 20px;
+  border-radius: 4px;
+  margin-top: 40px;
+}
+
+.terms-agreement h3 {
+  margin-top: 0;
+  color: #6772e5;
+}
+
+.terms-agreement p:last-child {
+  margin-bottom: 0;
+  font-style: italic;
+  color: #666;
+}
+</style>

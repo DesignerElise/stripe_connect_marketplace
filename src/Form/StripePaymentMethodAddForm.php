@@ -1,507 +1,256 @@
 <?php
 
-namespace Drupal\stripe_connect_marketplace;
+namespace Drupal\stripe_connect_marketplace\Form;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\Element;
+use Drupal\commerce_order\Entity\OrderInterface;
 
 /**
- * Provides integration with the Stripe API.
+ * Class StripePaymentMethodAddForm.
+ *
+ * Provides the Stripe Connect payment method add form with support for direct charges.
  */
-class StripeApiService {
+class StripePaymentMethodAddForm extends PaymentMethodAddForm {
 
   /**
-   * The config factory service.
-   *
-   * @var \Drupal\Core\Config\ConfigFactoryInterface
+   * {@inheritdoc}
    */
-  protected $configFactory;
+  public function buildCreditCardForm(array $element, FormStateInterface $form_state) {
+    $element = parent::buildCreditCardForm($element, $form_state);
+
+    // Get the payment gateway configuration.
+    $payment_method = $this->entity;
+    $payment_gateway_plugin = $payment_method->getPaymentGateway()->getPlugin();
+    $config = $payment_gateway_plugin->getConfiguration();
+
+    // Get Stripe publishable key from settings.
+    $settings = \Drupal::config('stripe_connect_marketplace.settings');
+    $environment = $settings->get('stripe_connect.environment');
+    $publishable_key = $environment === 'live'
+      ? $settings->get('stripe_connect.live_publishable_key')
+      : $settings->get('stripe_connect.test_publishable_key');
+
+    if (empty($publishable_key)) {
+      \Drupal::messenger()->addError(t('Stripe publishable key is not configured.'));
+      return $element;
+    }
+
+    // Determine if this is for a specific order.
+    $order = $this->getOrder($form_state);
+    $connected_account_id = null;
+
+    // For direct charges, we may need the connected account ID
+    if ($order) {
+      $connected_account_id = $this->getVendorStripeAccountId($order);
+    }
+
+    // Add extra element to store Stripe payment method ID.
+    $element['stripe_payment_method_id'] = [
+      '#type' => 'hidden',
+      '#default_value' => '',
+    ];
+
+    // Add hidden element to store the connected account ID when applicable.
+    if ($connected_account_id) {
+      $element['stripe_connect_account_id'] = [
+        '#type' => 'hidden',
+        '#default_value' => $connected_account_id,
+      ];
+    }
+
+    // Add a container for card errors.
+    $element['card_errors'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'div',
+      '#attributes' => [
+        'id' => 'stripe-card-errors',
+        'class' => ['stripe-card-errors'],
+        'role' => 'alert',
+      ],
+    ];
+
+    // Add the Stripe Elements container.
+    $element['stripe_elements'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'stripe-card-element',
+        'class' => ['form-control'],
+      ],
+    ];
+
+    // Add direct charges explanation if we're using a connected account.
+    if ($connected_account_id) {
+      $element['direct_charges_info'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'div',
+        '#attributes' => ['class' => ['direct-charges-info']],
+        '#value' => t('This payment method will be processed directly by the vendor through Stripe.'),
+      ];
+    }
+
+    // Attach the Stripe JS libraries and settings.
+    $element['#attached']['library'][] = 'stripe_connect_marketplace/stripe_js';
+    $element['#attached']['drupalSettings']['stripeConnect'] = [
+      'publishableKey' => $publishable_key,
+      'clientSecret' => '', // This would be set for payment intents
+      'connectedAccountId' => $connected_account_id, // Pass to JS for direct charges
+    ];
+
+    // Remove credit card fields that are replaced by Stripe Elements.
+    unset($element['number']);
+    unset($element['expiration']);
+    unset($element['security_code']);
+
+    return $element;
+  }
 
   /**
-   * The logger channel.
-   *
-   * @var \Drupal\Core\Logger\LoggerChannelInterface
+   * {@inheritdoc}
    */
-  protected $logger;
+  protected function validateCreditCardForm(array &$element, FormStateInterface $form_state) {
+    // The validation is handled by Stripe.js.
+    // We just need to make sure a payment method ID is present.
+    if (empty($form_state->getValue(['payment_information', 'stripe_payment_method_id']))) {
+      $form_state->setError($element, $this->t('No payment information provided.'));
+    }
+  }
 
   /**
-   * The Stripe API client.
-   *
-   * @var \Stripe\StripeClient
+   * {@inheritdoc}
    */
-  protected $client;
+  public function submitCreditCardForm(array $element, FormStateInterface $form_state) {
+    // Get the payment method ID provided by Stripe.js.
+    $stripe_payment_method_id = $form_state->getValue(['payment_information', 'stripe_payment_method_id']);
+    $connected_account_id = $form_state->getValue(['payment_information', 'stripe_connect_account_id']);
 
-  /**
-   * Are we in test mode? If true, return mock data instead of API calls.
-   *
-   * @var bool
-   */
-  protected $testMode = FALSE;
+    // Set it as the remote ID of the payment method.
+    $payment_method = $this->entity;
+    $payment_method->setRemoteId($stripe_payment_method_id);
 
-  /**
-   * Constructs a new StripeApiService object.
-   *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The config factory service.
-   * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
-   *   The logger factory service.
-   */
-  public function __construct(
-    ConfigFactoryInterface $config_factory,
-    LoggerChannelFactoryInterface $logger_factory
-  ) {
-    $this->configFactory = $config_factory;
-    $this->logger = $logger_factory->get('stripe_connect_marketplace');
-    
-    // Check if Stripe library exists
-    if (!class_exists('\Stripe\Stripe')) {
-      $this->logger->error('Stripe PHP library not found. Enable test mode or install with: composer require stripe/stripe-php');
-      $this->testMode = TRUE;
-    } else {
-      // Try to initialize the API client
-      $this->initClient();
+    // Store the connected account ID in metadata if present
+    // This is crucial for direct charges to work correctly
+    $payment_method_data = [
+      'remote_id' => $stripe_payment_method_id,
+    ];
+
+    if ($connected_account_id) {
+      // Add metadata to track this payment method's connected account
+      $payment_method_data['metadata'] = [
+        'stripe_connect_account_id' => $connected_account_id,
+        'payment_model' => 'direct_charge',
+      ];
       
-      // If initialization failed, enable test mode
-      if (!$this->client) {
-        $this->testMode = TRUE;
+      // Store in field_data for retrieval during payment processing
+      if ($payment_method->hasField('field_stripe_connect_data')) {
+        $payment_method->set('field_stripe_connect_data', json_encode([
+          'connected_account_id' => $connected_account_id,
+        ]));
       }
     }
-  }
 
-  /**
-   * Initializes the Stripe API client.
-   */
-  protected function initClient() {
-    $config = $this->configFactory->get('stripe_connect_marketplace.settings');
-    $stripe_connect = $config->get('stripe_connect') ?: [];
-    
-    $environment = isset($stripe_connect['environment']) ? $stripe_connect['environment'] : 'test';
-    $secret_key = isset($stripe_connect[$environment . '_secret_key']) ? $stripe_connect[$environment . '_secret_key'] : '';
-
-    if (empty($secret_key)) {
-      $this->logger->warning('Stripe API key is not configured. Using test mode.');
-      return;
-    }
-
-    try {
-      \Stripe\Stripe::setApiKey($secret_key);
-      $this->client = new \Stripe\StripeClient($secret_key);
-      $this->logger->info('Stripe client initialized successfully.');
-    }
-    catch (\Exception $e) {
-      $this->logger->error('Error initializing Stripe client: @message', ['@message' => $e->getMessage()]);
-      $this->client = NULL;
-    }
-  }
-
-  /**
-   * Gets the Stripe client.
-   *
-   * @return \Stripe\StripeClient|null
-   *   The Stripe client, or NULL if unavailable.
-   */
-  public function getClient() {
-    return $this->client;
-  }
-
-  /**
-   * Creates a Stripe API resource.
-   *
-   * @param string $resource
-   *   The resource name (e.g., 'PaymentIntent', 'Account').
-   * @param array $params
-   *   The parameters for the resource.
-   *
-   * @return object
-   *   The created Stripe resource or a mock object in test mode.
-   *
-   * @throws \Exception
-   */
-  public function create($resource, array $params) {
-    // If we're in test mode, return mock data
-    if ($this->testMode) {
-      return $this->createMockResource($resource, $params);
-    }
-    
-    // Check if client is initialized
-    if (!$this->client) {
-      throw new \Exception('Stripe API client is not initialized. Please configure valid API keys.');
-    }
-    
-    try {
-      // Convert the resource name to the appropriate method name based on the Stripe API structure
-      switch ($resource) {
-        case 'Account':
-          return $this->client->accounts->create($params);
-        
-        case 'AccountLink':
-          return $this->client->accountLinks->create($params);
-        
-        case 'PaymentIntent':
-          return $this->client->paymentIntents->create($params);
+    // Extract billing information if available.
+    if (!empty($form_state->getValue(['payment_information', 'billing_information']))) {
+      $billing_info = $form_state->getValue(['payment_information', 'billing_information']);
+      
+      // In direct charges, we need to ensure billing information is attached
+      if ($connected_account_id && !empty($billing_info['address'])) {
+        // Format billing address for Stripe
+        $address = reset($billing_info['address']);
+        if (!empty($address['address'])) {
+          $payment_method_data['billing_details'] = [
+            'address' => [
+              'line1' => $address['address']['address_line1'] ?? '',
+              'line2' => $address['address']['address_line2'] ?? '',
+              'city' => $address['address']['locality'] ?? '',
+              'state' => $address['address']['administrative_area'] ?? '',
+              'postal_code' => $address['address']['postal_code'] ?? '',
+              'country' => $address['address']['country_code'] ?? '',
+            ],
+          ];
           
-        case 'SetupIntent':
-          return $this->client->setupIntents->create($params);
+          // Add name if available
+          if (!empty($address['address']['given_name']) || !empty($address['address']['family_name'])) {
+            $name = trim(($address['address']['given_name'] ?? '') . ' ' . ($address['address']['family_name'] ?? ''));
+            $payment_method_data['billing_details']['name'] = $name;
+          }
           
-        case 'Customer':
-          return $this->client->customers->create($params);
-          
-        case 'Source':
-          return $this->client->sources->create($params);
-          
-        case 'PaymentMethod':
-          return $this->client->paymentMethods->create($params);
-          
-        case 'Charge':
-          return $this->client->charges->create($params);
-          
-        case 'Refund':
-          return $this->client->refunds->create($params);
-          
-        case 'Payout':
-          return $this->client->payouts->create($params);
-          
-        default:
-          throw new \Exception("Invalid Stripe resource type: $resource");
-      }
-    }
-    catch (\Exception $e) {
-      $this->logger->error('Error creating @resource: @message', [
-        '@resource' => $resource,
-        '@message' => $e->getMessage(),
-      ]);
-      throw $e;
-    }
-  }
-
-  /**
-   * Retrieves a Stripe API resource.
-   *
-   * @param string $resource
-   *   The resource name (e.g., 'PaymentIntent', 'Account').
-   * @param string $id
-   *   The resource ID.
-   * @param array $params
-   *   Optional parameters.
-   *
-   * @return object
-   *   The Stripe resource or a mock object in test mode.
-   *
-   * @throws \Exception
-   */
-  public function retrieve($resource, $id, array $params = []) {
-    // If we're in test mode, return mock data
-    if ($this->testMode) {
-      return $this->retrieveMockResource($resource, $id, $params);
-    }
-    
-    // Check if client is initialized
-    if (!$this->client) {
-      throw new \Exception('Stripe API client is not initialized. Please configure valid API keys.');
-    }
-    
-    try {
-      // Convert the resource name to the appropriate method name based on the Stripe API structure
-      switch ($resource) {
-        case 'Account':
-          return $this->client->accounts->retrieve($id, $params);
-        
-        case 'Balance':
-          return $this->client->balance->retrieve($params);
-        
-        case 'PaymentIntent':
-          return $this->client->paymentIntents->retrieve($id, $params);
-          
-        case 'SetupIntent':
-          return $this->client->setupIntents->retrieve($id, $params);
-          
-        case 'Customer':
-          return $this->client->customers->retrieve($id, $params);
-          
-        case 'PaymentMethod':
-          return $this->client->paymentMethods->retrieve($id, $params);
-          
-        case 'Charge':
-          return $this->client->charges->retrieve($id, $params);
-          
-        case 'Refund':
-          return $this->client->refunds->retrieve($id, $params);
-          
-        case 'Payout':
-          return $this->client->payouts->retrieve($id, $params);
-          
-        default:
-          throw new \Exception("Invalid Stripe resource type: $resource");
-      }
-    }
-    catch (\Exception $e) {
-      $this->logger->error('Error retrieving @resource @id: @message', [
-        '@resource' => $resource,
-        '@id' => $id,
-        '@message' => $e->getMessage(),
-      ]);
-      throw $e;
-    }
-  }
-
-  /**
-   * Updates a Stripe API resource.
-   *
-   * @param string $resource
-   *   The resource name (e.g., 'PaymentIntent', 'Account').
-   * @param string $id
-   *   The resource ID.
-   * @param array $params
-   *   The parameters to update.
-   *
-   * @return object
-   *   The updated Stripe resource or a mock object in test mode.
-   *
-   * @throws \Exception
-   */
-  public function update($resource, $id, array $params) {
-    // If we're in test mode, return mock data
-    if ($this->testMode) {
-      return $this->updateMockResource($resource, $id, $params);
-    }
-    
-    // Check if client is initialized
-    if (!$this->client) {
-      throw new \Exception('Stripe API client is not initialized. Please configure valid API keys.');
-    }
-    
-    try {
-      // Convert the resource name to the appropriate method name based on the Stripe API structure
-      switch ($resource) {
-        case 'Account':
-          return $this->client->accounts->update($id, $params);
-        
-        case 'PaymentIntent':
-          return $this->client->paymentIntents->update($id, $params);
-          
-        case 'SetupIntent':
-          return $this->client->setupIntents->update($id, $params);
-          
-        case 'Customer':
-          return $this->client->customers->update($id, $params);
-          
-        case 'PaymentMethod':
-          return $this->client->paymentMethods->update($id, $params);
-          
-        case 'Subscription':
-          return $this->client->subscriptions->update($id, $params);
-          
-        default:
-          throw new \Exception("Invalid Stripe resource type: $resource");
-      }
-    }
-    catch (\Exception $e) {
-      $this->logger->error('Error updating @resource @id: @message', [
-        '@resource' => $resource,
-        '@id' => $id,
-        '@message' => $e->getMessage(),
-      ]);
-      throw $e;
-    }
-  }
-
-  /**
-   * Constructs a Stripe Event from a webhook payload.
-   *
-   * @param string $payload
-   *   The webhook payload.
-   * @param string $sig_header
-   *   The Stripe-Signature header.
-   * @param string $webhook_secret
-   *   The webhook signing secret.
-   *
-   * @return \Stripe\Event
-   *   The constructed Stripe Event or a mock object in test mode.
-   *
-   * @throws \UnexpectedValueException
-   * @throws \Stripe\Exception\SignatureVerificationException
-   */
-  public function constructWebhookEvent($payload, $sig_header, $webhook_secret) {
-    // If we're in test mode, return mock data
-    if ($this->testMode) {
-      return $this->createMockEvent($payload);
-    }
-    
-    // Check if Stripe library is available
-    if (!class_exists('\Stripe\Webhook')) {
-      throw new \Exception('Stripe PHP library is not installed. Please run: composer require stripe/stripe-php');
-    }
-    
-    return \Stripe\Webhook::constructEvent(
-      $payload, $sig_header, $webhook_secret
-    );
-  }
-
-  /**
-   * Creates a mock Stripe resource for testing.
-   *
-   * @param string $resource
-   *   The resource name.
-   * @param array $params
-   *   The parameters.
-   *
-   * @return \stdClass
-   *   A mock Stripe resource.
-   */
-  protected function createMockResource($resource, array $params) {
-    $mock = new \stdClass();
-    
-    switch ($resource) {
-      case 'Account':
-        $mock->id = 'acct_' . md5(uniqid('', TRUE));
-        $mock->object = 'account';
-        $mock->created = time();
-        $mock->details_submitted = TRUE;
-        $mock->charges_enabled = TRUE;
-        $mock->payouts_enabled = TRUE;
-        break;
-        
-      case 'AccountLink':
-        $mock->object = 'account_link';
-        $mock->created = time();
-        $mock->expires_at = time() + 3600;
-        $mock->url = 'https://connect.stripe.com/mock/acct_link/' . md5(uniqid('', TRUE));
-        break;
-        
-      case 'PaymentIntent':
-        $mock->id = 'pi_' . md5(uniqid('', TRUE));
-        $mock->object = 'payment_intent';
-        $mock->amount = isset($params['amount']) ? $params['amount'] : 1000;
-        $mock->currency = isset($params['currency']) ? $params['currency'] : 'usd';
-        $mock->status = 'succeeded';
-        $mock->created = time();
-        if (isset($params['metadata'])) {
-          $mock->metadata = (object) $params['metadata'];
-        }
-        break;
-        
-      default:
-        $mock->id = 'mock_' . md5(uniqid('', TRUE));
-        $mock->object = strtolower($resource);
-        $mock->created = time();
-    }
-    
-    $this->logger->info('Created mock @resource: @id', [
-      '@resource' => $resource,
-      '@id' => $mock->id,
-    ]);
-    
-    return $mock;
-  }
-
-  /**
-   * Retrieves a mock Stripe resource for testing.
-   *
-   * @param string $resource
-   *   The resource name.
-   * @param string $id
-   *   The resource ID.
-   * @param array $params
-   *   Optional parameters.
-   *
-   * @return \stdClass
-   *   A mock Stripe resource.
-   */
-  protected function retrieveMockResource($resource, $id, array $params = []) {
-    $mock = new \stdClass();
-    $mock->id = $id;
-    $mock->object = strtolower($resource);
-    $mock->created = time() - 86400; // Yesterday
-    
-    switch ($resource) {
-      case 'Account':
-        $mock->details_submitted = TRUE;
-        $mock->charges_enabled = TRUE;
-        $mock->payouts_enabled = TRUE;
-        break;
-        
-      case 'Balance':
-        $mock->available = [
-          (object) [
-            'amount' => 10000,
-            'currency' => 'usd',
-          ],
-        ];
-        $mock->pending = [
-          (object) [
-            'amount' => 5000,
-            'currency' => 'usd',
-          ],
-        ];
-        break;
-    }
-    
-    $this->logger->info('Retrieved mock @resource: @id', [
-      '@resource' => $resource,
-      '@id' => $id,
-    ]);
-    
-    return $mock;
-  }
-
-  /**
-   * Updates a mock Stripe resource for testing.
-   *
-   * @param string $resource
-   *   The resource name.
-   * @param string $id
-   *   The resource ID.
-   * @param array $params
-   *   The parameters to update.
-   *
-   * @return \stdClass
-   *   A mock Stripe resource.
-   */
-  protected function updateMockResource($resource, $id, array $params) {
-    $mock = $this->retrieveMockResource($resource, $id);
-    
-    // Apply update params
-    foreach ($params as $key => $value) {
-      if (is_array($value) && isset($mock->{$key}) && is_object($mock->{$key})) {
-        foreach ($value as $subkey => $subvalue) {
-          $mock->{$key}->{$subkey} = $subvalue;
+          // Add email if available
+          if (!empty($billing_info['email'])) {
+            $payment_method_data['billing_details']['email'] = $billing_info['email'];
+          }
         }
       }
-      else {
-        $mock->{$key} = $value;
-      }
     }
-    
-    $mock->updated = time();
-    
-    $this->logger->info('Updated mock @resource: @id', [
-      '@resource' => $resource,
-      '@id' => $id,
-    ]);
-    
-    return $mock;
+
+    // Set the payment method type.
+    $payment_method->card_type = '';
+    $payment_method->card_number = '';
+    $payment_method->card_exp_month = '';
+    $payment_method->card_exp_year = '';
+
+    // Store additional data in the payment method's data storage
+    if (!empty($payment_method_data) && method_exists($payment_method, 'setData')) {
+      $payment_method->setData($payment_method_data);
+    }
+
+    // We don't need to call parent::submitCreditCardForm() since we're not using
+    // the default fields.
   }
 
   /**
-   * Creates a mock Stripe event for testing.
+   * Gets the order from the form state.
    *
-   * @param string $payload
-   *   The webhook payload.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current form state.
    *
-   * @return \stdClass
-   *   A mock Stripe event.
+   * @return \Drupal\commerce_order\Entity\OrderInterface|null
+   *   The order, or NULL if not found.
    */
-  protected function createMockEvent($payload) {
-    $event = new \stdClass();
-    $event->id = 'evt_' . md5(uniqid('', TRUE));
-    $event->object = 'event';
-    $event->created = time();
-    $event->type = 'mock.event';
-    $event->data = new \stdClass();
-    $event->data->object = new \stdClass();
+  protected function getOrder(FormStateInterface $form_state) {
+    // Try to get the order from the form state or payment method
+    $order = $form_state->get('order');
+    if (!$order && $this->entity && method_exists($this->entity, 'getOrder')) {
+      $order = $this->entity->getOrder();
+    }
     
-    $this->logger->info('Created mock event: @id', ['@id' => $event->id]);
+    // Last resort - check for order ID in storage
+    if (!$order && $form_state->has('order_id')) {
+      $order_id = $form_state->get('order_id');
+      $order = \Drupal::entityTypeManager()->getStorage('commerce_order')->load($order_id);
+    }
     
-    return $event;
+    return $order instanceof OrderInterface ? $order : null;
+  }
+
+  /**
+   * Gets the Stripe account ID for the vendor/store associated with the order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   *
+   * @return string|null
+   *   The Stripe account ID or NULL if not found.
+   */
+  protected function getVendorStripeAccountId(OrderInterface $order) {
+    // Get the store associated with the order.
+    $store = $order->getStore();
+    if (!$store) {
+      return NULL;
+    }
+    
+    // Get the store owner.
+    $owner = $store->getOwner();
+    if (!$owner) {
+      return NULL;
+    }
+    
+    // Check if the owner has a Stripe account ID field.
+    if ($owner->hasField('field_stripe_account_id') && !$owner->get('field_stripe_account_id')->isEmpty()) {
+      return $owner->get('field_stripe_account_id')->value;
+    }
+    
+    return NULL;
   }
 }

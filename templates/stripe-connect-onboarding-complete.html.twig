@@ -10,6 +10,7 @@
  *   - payouts_enabled: Whether payouts are enabled.
  *   - details_submitted: Whether account details are submitted.
  * - user: The vendor user entity.
+ * - stripe_connect: Stripe Connect configuration including application_fee_percent.
  */
 #}
 
@@ -17,7 +18,7 @@
   <h2>{{ 'Vendor Onboarding Status'|t }}</h2>
   
   <div class="onboarding-description">
-    <p>{{ 'With Stripe Connect, you can collect payments directly from customers. Our marketplace adds a small platform fee to each transaction, but all payments are processed directly through your Stripe account.'|t }}</p>
+    <p>{{ 'With Stripe Connect, you can collect payments directly from customers. Our marketplace adds a %fee% platform fee to each transaction, but all payments are processed directly through your Stripe account.'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</p>
   </div>
 
   <div class="onboarding-status">
@@ -92,7 +93,7 @@
     <p>{{ 'When customers make a purchase from your store:'|t }}</p>
     <ol>
       <li>{{ 'Payments are processed directly through your Stripe account.'|t }}</li>
-      <li>{{ 'Our platform fee is automatically deducted from each transaction.'|t }}</li>
+      <li>{{ 'Our platform fee of %fee% is automatically deducted from each transaction.'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</li>
       <li>{{ 'The remaining amount is available in your Stripe balance.'|t }}</li>
       <li>{{ 'Stripe will deposit funds to your bank account according to your payout schedule.'|t }}</li>
     </ol>

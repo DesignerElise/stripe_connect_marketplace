@@ -71,31 +71,38 @@ class StripeConnectSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    // Get raw configuration
+    // Get configuration
     $config = $this->config('stripe_connect_marketplace.settings');
-    $raw_config = $config->getRawData();
+    $stripe_connect = $config->get('stripe_connect') ?: [];
     
-    // Show current configuration for debugging
-    $form['config_debug'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Current Configuration'),
-      '#open' => TRUE,
+    $form['payment_model_info'] = [
+      '#type' => 'markup',
+      '#markup' => $this->t('
+        <div class="payment-model-info">
+          <h2>Direct Charges Payment Model</h2>
+          <p>This marketplace uses Stripe Connect\'s <strong>Direct Charges</strong> model where:</p>
+          <ul>
+            <li>Vendors collect payments directly to their Stripe accounts</li>
+            <li>Your platform automatically collects an application fee on each transaction</li>
+            <li>Vendors receive payouts directly from Stripe based on their payout schedule</li>
+          </ul>
+        </div>
+      '),
     ];
     
-    $form['config_debug']['current_config'] = [
-      '#markup' => '<pre>' . print_r($raw_config, TRUE) . '</pre>',
-    ];
-    
-    // Basic settings
+    // API Keys fieldset
     $form['api_keys'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Stripe API Keys'),
+      '#description' => $this->t('Enter your Stripe API keys. These are used for the platform account that will collect application fees.'),
+      '#collapsible' => FALSE,
+      '#collapsed' => FALSE,
     ];
     
     $form['api_keys']['test_secret_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Test Secret Key'),
-      '#default_value' => isset($raw_config['stripe_connect']['test_secret_key']) ? $raw_config['stripe_connect']['test_secret_key'] : '',
+      '#default_value' => isset($stripe_connect['test_secret_key']) ? $stripe_connect['test_secret_key'] : '',
       '#description' => $this->t('Enter your Stripe test secret key (starts with sk_test_).'),
       '#required' => FALSE,
     ];
@@ -103,7 +110,7 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $form['api_keys']['test_publishable_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Test Publishable Key'),
-      '#default_value' => isset($raw_config['stripe_connect']['test_publishable_key']) ? $raw_config['stripe_connect']['test_publishable_key'] : '',
+      '#default_value' => isset($stripe_connect['test_publishable_key']) ? $stripe_connect['test_publishable_key'] : '',
       '#description' => $this->t('Enter your Stripe test publishable key (starts with pk_test_).'),
       '#required' => FALSE,
     ];
@@ -111,7 +118,7 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $form['api_keys']['live_secret_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Live Secret Key'),
-      '#default_value' => isset($raw_config['stripe_connect']['live_secret_key']) ? $raw_config['stripe_connect']['live_secret_key'] : '',
+      '#default_value' => isset($stripe_connect['live_secret_key']) ? $stripe_connect['live_secret_key'] : '',
       '#description' => $this->t('Enter your Stripe live secret key (starts with sk_live_).'),
       '#required' => FALSE,
     ];
@@ -119,7 +126,7 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $form['api_keys']['live_publishable_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Live Publishable Key'),
-      '#default_value' => isset($raw_config['stripe_connect']['live_publishable_key']) ? $raw_config['stripe_connect']['live_publishable_key'] : '',
+      '#default_value' => isset($stripe_connect['live_publishable_key']) ? $stripe_connect['live_publishable_key'] : '',
       '#description' => $this->t('Enter your Stripe live publishable key (starts with pk_live_).'),
       '#required' => FALSE,
     ];
@@ -131,25 +138,115 @@ class StripeConnectSettingsForm extends ConfigFormBase {
         'test' => $this->t('Test'),
         'live' => $this->t('Live'),
       ],
-      '#default_value' => isset($raw_config['stripe_connect']['environment']) ? $raw_config['stripe_connect']['environment'] : 'test',
+      '#default_value' => isset($stripe_connect['environment']) ? $stripe_connect['environment'] : 'test',
       '#required' => TRUE,
+      '#description' => $this->t('Select the Stripe environment to use. Test mode will not process real payments.'),
     ];
     
-    $form['webhook_secret'] = [
+    // Application Fee Settings
+    $form['application_fee'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Application Fee Settings'),
+      '#description' => $this->t('Configure the fee that your platform collects on each transaction.'),
+    ];
+    
+    $form['application_fee']['application_fee_percent'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Application Fee Percentage'),
+      '#default_value' => isset($stripe_connect['application_fee_percent']) ? $stripe_connect['application_fee_percent'] : 10,
+      '#min' => 0,
+      '#max' => 100,
+      '#step' => 0.01,
+      '#required' => TRUE,
+      '#description' => $this->t('Enter the percentage of each transaction that your platform will collect as a fee.'),
+    ];
+    
+    // Add fee example calculation
+    $current_fee = isset($stripe_connect['application_fee_percent']) ? $stripe_connect['application_fee_percent'] : 10;
+    $example_amount = 100;
+    $example_fee = ($example_amount * $current_fee / 100);
+    
+    $form['application_fee']['fee_example'] = [
+      '#markup' => $this->t('<div class="fee-example">For example, on a $@amount transaction, the platform fee would be $@fee.</div>', [
+        '@amount' => number_format($example_amount, 2),
+        '@fee' => number_format($example_fee, 2),
+      ]),
+    ];
+    
+    // Webhook Settings
+    $form['webhook'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Webhook Settings'),
+      '#description' => $this->t('Configure Stripe webhooks to receive real-time notifications.'),
+    ];
+    
+    $form['webhook']['webhook_secret'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Webhook Secret'),
-      '#default_value' => isset($raw_config['stripe_connect']['webhook_secret']) ? $raw_config['stripe_connect']['webhook_secret'] : '',
+      '#default_value' => isset($stripe_connect['webhook_secret']) ? $stripe_connect['webhook_secret'] : '',
       '#description' => $this->t('Enter your Stripe webhook signing secret.'),
       '#required' => FALSE,
     ];
     
-    $form['webhook_url'] = [
+    $form['webhook']['webhook_url'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Webhook URL'),
       '#value' => \Drupal::request()->getSchemeAndHttpHost() . '/stripe/webhook',
       '#description' => $this->t('Use this URL when configuring webhooks in your Stripe Dashboard.'),
       '#disabled' => TRUE,
     ];
+    
+    $form['webhook']['webhook_events'] = [
+      '#markup' => $this->t('<div class="webhook-events"><strong>Required webhook events:</strong>
+        <ul>
+          <li>account.updated</li>
+          <li>charge.refunded</li>
+          <li>payment_intent.succeeded</li>
+          <li>payment_intent.payment_failed</li>
+          <li>payout.created</li>
+          <li>payout.paid</li>
+          <li>payout.failed</li>
+          <li>application_fee.created</li>
+        </ul></div>'),
+    ];
+    
+    // Advanced Settings
+    $form['advanced'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Advanced Settings'),
+      '#open' => FALSE,
+    ];
+    
+    $form['advanced']['payout_schedule'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Default Payout Schedule'),
+      '#options' => [
+        'automatic' => $this->t('Automatic (Stripe Default)'),
+        'manual' => $this->t('Manual (Platform Controlled)'),
+      ],
+      '#default_value' => isset($stripe_connect['payout_schedule']) ? $stripe_connect['payout_schedule'] : 'automatic',
+      '#description' => $this->t('Select the default payout schedule for vendors. Automatic allows Stripe to handle payouts based on the schedule below.'),
+    ];
+    
+    $form['advanced']['payout_interval'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Default Payout Interval'),
+      '#options' => [
+        'daily' => $this->t('Daily'),
+        'weekly' => $this->t('Weekly'),
+        'monthly' => $this->t('Monthly'),
+      ],
+      '#default_value' => isset($stripe_connect['payout_interval']) ? $stripe_connect['payout_interval'] : 'daily',
+      '#description' => $this->t('Select the default frequency of payouts for vendors. This can be overridden on a per-vendor basis.'),
+      '#states' => [
+        'visible' => [
+          ':input[name="payout_schedule"]' => ['value' => 'automatic'],
+        ],
+      ],
+    ];
+    
+    // Add custom JavaScript for dynamic example calculation
+    $form['#attached']['library'][] = 'stripe_connect_marketplace/admin_settings';
     
     return parent::buildForm($form, $form_state);
   }
@@ -182,6 +279,12 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $live_publishable_key = $form_state->getValue('live_publishable_key');
     if (!empty($live_publishable_key) && !preg_match('/^pk_live_/', $live_publishable_key)) {
       $form_state->setError($form['api_keys']['live_publishable_key'], $this->t('Live publishable key must start with pk_live_'));
+    }
+    
+    // Validate application fee percentage
+    $fee_percent = $form_state->getValue('application_fee_percent');
+    if ($fee_percent < 0 || $fee_percent > 100) {
+      $form_state->setError($form['application_fee']['application_fee_percent'], $this->t('Application fee percentage must be between 0 and 100.'));
     }
   }
 
@@ -223,31 +326,27 @@ class StripeConnectSettingsForm extends ConfigFormBase {
       $stripe_connect['webhook_secret'] = $webhook_secret;
     }
     
-    // Make sure we maintain default values
-    if (!isset($stripe_connect['application_fee_percent'])) {
-      $stripe_connect['application_fee_percent'] = 10;
-    }
+    // Save application fee percentage
+    $stripe_connect['application_fee_percent'] = $form_state->getValue('application_fee_percent');
     
-    if (!isset($stripe_connect['payout_schedule'])) {
-      $stripe_connect['payout_schedule'] = 'automatic';
-    }
-    
-    if (!isset($stripe_connect['payout_interval'])) {
-      $stripe_connect['payout_interval'] = 'daily';
-    }
+    // Save payout settings
+    $stripe_connect['payout_schedule'] = $form_state->getValue('payout_schedule');
+    $stripe_connect['payout_interval'] = $form_state->getValue('payout_interval');
     
     // Save the updated configuration
     $config->set('stripe_connect', $stripe_connect);
     $config->save();
     
     // Log the saved configuration for debugging
-    $this->logger->notice('Saved Stripe Connect configuration: @config', [
-      '@config' => print_r($config->get('stripe_connect'), TRUE),
+    $this->logger->notice('Saved Stripe Connect configuration with application fee: @fee%', [
+      '@fee' => $stripe_connect['application_fee_percent'],
     ]);
     
     parent::submitForm($form, $form_state);
     
     // Add a success message
-    $this->messenger()->addStatus($this->t('Stripe Connect settings have been saved. To verify, see the Current Configuration section.'));
+    $this->messenger()->addStatus($this->t('Stripe Connect settings have been saved. Your marketplace is configured for direct charges with a @fee% application fee.', [
+      '@fee' => $stripe_connect['application_fee_percent'],
+    ]));
   }
 }

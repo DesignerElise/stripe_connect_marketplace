@@ -1,57 +1,369 @@
+{#
+/**
+ * @file
+ * Template for displaying detailed Stripe Connect vendor information.
+ *
+ * Available variables:
+ * - vendor: The vendor information.
+ *   - uid: The vendor user ID.
+ *   - name: The vendor display name.
+ *   - email: The vendor email address.
+ * - account: The Stripe Connect account information.
+ *   - id: The Stripe account ID.
+ *   - type: The account type (e.g., express).
+ *   - charges_enabled: Whether charges are enabled.
+ *   - payouts_enabled: Whether payouts are enabled.
+ *   - details_submitted: Whether account details are submitted.
+ *   - created: The timestamp when the account was created.
+ * - balance: The account balance information.
+ *   - available: List of available balances by currency.
+ *   - pending: List of pending balances by currency.
+ * - payouts: List of recent payouts.
+ * - stripe_connect: Stripe Connect configuration including application_fee_percent.
+ */
+#}
+
 <div class="stripe-connect-vendor-details">
-    <h1>Vendor Details: {{ vendor.name }}</h1>
+  <h1>{{ 'Vendor Details'|t }}: {{ vendor.name }}</h1>
+  
+  <div class="direct-charges-info">
+    <p>{{ 'This vendor collects payments directly through their Stripe Connect account. Your platform automatically collects a %fee% fee on each transaction.'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</p>
+  </div>
+  
+  <div class="vendor-cards-container">
+    <div class="vendor-info-card">
+      <h2>{{ 'Vendor Information'|t }}</h2>
+      <div class="card-content">
+        <div class="info-row">
+          <label>{{ 'Name:'|t }}</label>
+          <span>{{ vendor.name }}</span>
+        </div>
+        <div class="info-row">
+          <label>{{ 'Email:'|t }}</label>
+          <span>{{ vendor.email }}</span>
+        </div>
+        <div class="info-row">
+          <label>{{ 'User ID:'|t }}</label>
+          <span>{{ vendor.uid }}</span>
+        </div>
+        <div class="actions">
+          <a href="{{ path('user.view', {'user': vendor.uid}) }}" class="button">{{ 'View User Profile'|t }}</a>
+        </div>
+      </div>
+    </div>
     
-    <section class="vendor-info">
-      <h2>Vendor Information</h2>
-      <p>Name: {{ vendor.name }}</p>
-      <p>Email: {{ vendor.email }}</p>
-    </section>
+    <div class="stripe-account-card">
+      <h2>{{ 'Stripe Account'|t }}</h2>
+      <div class="card-content">
+        <div class="info-row">
+          <label>{{ 'Account ID:'|t }}</label>
+          <span class="account-id">{{ account.id }}</span>
+        </div>
+        <div class="info-row">
+          <label>{{ 'Account Type:'|t }}</label>
+          <span>{{ account.type|capitalize }}</span>
+        </div>
+        <div class="info-row">
+          <label>{{ 'Created:'|t }}</label>
+          <span>{{ account.created|date('Y-m-d H:i:s') }}</span>
+        </div>
+        <div class="info-row status-row">
+          <label>{{ 'Status:'|t }}</label>
+          <div class="status-indicators">
+            <span class="status-indicator {{ account.details_submitted ? 'enabled' : 'disabled' }}">
+              {{ 'Details'|t }}: {{ account.details_submitted ? 'Complete'|t : 'Incomplete'|t }}
+            </span>
+            <span class="status-indicator {{ account.charges_enabled ? 'enabled' : 'disabled' }}">
+              {{ 'Charges'|t }}: {{ account.charges_enabled ? 'Enabled'|t : 'Disabled'|t }}
+            </span>
+            <span class="status-indicator {{ account.payouts_enabled ? 'enabled' : 'disabled' }}">
+              {{ 'Payouts'|t }}: {{ account.payouts_enabled ? 'Enabled'|t : 'Disabled'|t }}
+            </span>
+          </div>
+        </div>
+        <div class="actions">
+          <a href="https://dashboard.stripe.com/connect/accounts/{{ account.id }}" class="button" target="_blank">{{ 'View in Stripe'|t }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="vendor-balances">
+    <h2>{{ 'Balance'|t }}</h2>
+    <p class="direct-charges-explanation">{{ 'This balance is from the vendor\'s Stripe account. With direct charges, all funds (minus platform fees) go directly to the vendor\'s account.'|t }}</p>
     
-    <section class="account-details">
-      <h2>Stripe Account</h2>
-      <p>Account ID: {{ account.id }}</p>
-      <p>Type: {{ account.type }}</p>
-      <p>Charges Enabled: {{ account.charges_enabled ? 'Yes' : 'No' }}</p>
-      <p>Payouts Enabled: {{ account.payouts_enabled ? 'Yes' : 'No' }}</p>
-      <p>Details Submitted: {{ account.details_submitted ? 'Yes' : 'No' }}</p>
-    </section>
-    
-    <section class="balance">
-      <h2>Balance</h2>
-      <h3>Available Balance</h3>
-      <ul>
-        {% for balance in balance.available %}
-          <li>{{ balance.amount }} {{ balance.currency }}</li>
-        {% endfor %}
-      </ul>
+    <div class="balance-cards-container">
+      <div class="balance-card available">
+        <h3>{{ 'Available Balance'|t }}</h3>
+        {% if balance.available %}
+          <ul class="balance-list">
+            {% for balance in balance.available %}
+              <li>
+                <span class="balance-amount">{{ balance.amount|number_format(2) }}</span>
+                <span class="balance-currency">{{ balance.currency }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="no-balance">{{ 'No available balance'|t }}</p>
+        {% endif %}
+      </div>
       
-      <h3>Pending Balance</h3>
-      <ul>
-        {% for balance in balance.pending %}
-          <li>{{ balance.amount }} {{ balance.currency }}</li>
-        {% endfor %}
-      </ul>
-    </section>
+      <div class="balance-card pending">
+        <h3>{{ 'Pending Balance'|t }}</h3>
+        {% if balance.pending %}
+          <ul class="balance-list">
+            {% for balance in balance.pending %}
+              <li>
+                <span class="balance-amount">{{ balance.amount|number_format(2) }}</span>
+                <span class="balance-currency">{{ balance.currency }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="no-balance">{{ 'No pending balance'|t }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  
+  <div class="vendor-payouts">
+    <h2>{{ 'Recent Payouts'|t }}</h2>
+    <p class="direct-charges-explanation">{{ 'With direct charges, payouts are sent directly from Stripe to the vendor\'s bank account based on their payout schedule.'|t }}</p>
     
-    <section class="recent-payouts">
-      <h2>Recent Payouts</h2>
-      <table>
+    {% if payouts %}
+      <table class="payouts-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Amount</th>
-            <th>Status</th>
+            <th>{{ 'Date'|t }}</th>
+            <th>{{ 'Amount'|t }}</th>
+            <th>{{ 'Status'|t }}</th>
+            <th>{{ 'Arrival'|t }}</th>
           </tr>
         </thead>
         <tbody>
           {% for payout in payouts %}
             <tr>
               <td>{{ payout.created|date('Y-m-d H:i:s') }}</td>
-              <td>{{ payout.amount / 100 }} {{ payout.currency|upper }}</td>
-              <td>{{ payout.status }}</td>
+              <td>
+                <span class="amount">{{ (payout.amount / 100)|number_format(2) }}</span>
+                <span class="currency">{{ payout.currency|upper }}</span>
+              </td>
+              <td class="status {{ payout.status }}">{{ payout.status|capitalize }}</td>
+              <td>{{ payout.arrival_date ? payout.arrival_date|date('Y-m-d') : 'Pending'|t }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
-    </section>
+      <div class="actions">
+        <a href="{{ path('stripe_connect_marketplace.view_vendor_payouts', {'user': vendor.uid}) }}" class="button">{{ 'View All Payouts'|t }}</a>
+      </div>
+    {% else %}
+      <p class="no-payouts">{{ 'No recent payouts.'|t }}</p>
+    {% endif %}
   </div>
+  
+  <div class="vendor-fees">
+    <h2>{{ 'Platform Fees'|t }}</h2>
+    <p class="direct-charges-explanation">{{ 'Your platform automatically collects a %fee% fee on each transaction processed by this vendor.'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</p>
+    
+    <div class="fees-summary">
+      <div class="fee-info">
+        <label>{{ 'Fee Percentage:'|t }}</label>
+        <span class="fee-percentage">{{ stripe_connect.application_fee_percent }}%</span>
+      </div>
+      <div class="fee-info">
+        <label>{{ 'Fee Model:'|t }}</label>
+        <span class="fee-model">{{ 'Direct Charges'|t }}</span>
+      </div>
+    </div>
+    
+    <div class="fee-example">
+      <h3>{{ 'Example Fee Calculation'|t }}</h3>
+      <p>{{ 'On a $100.00 transaction, the platform fee would be $%fee%.'|t({'%fee%': (stripe_connect.application_fee_percent)|number_format(2)}) }}</p>
+    </div>
+  </div>
+</div>
+
+<style>
+.stripe-connect-vendor-details {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.direct-charges-info {
+  background-color: #f7f9fc;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 24px;
+  border-left: 4px solid #6772e5;
+}
+
+.vendor-cards-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.vendor-info-card, .stripe-account-card {
+  flex: 1;
+  min-width: 300px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.card-content {
+  padding: 16px;
+}
+
+.info-row {
+  margin-bottom: 12px;
+  display: flex;
+}
+
+.info-row label {
+  font-weight: bold;
+  min-width: 120px;
+}
+
+.status-indicators {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-indicator {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.status-indicator.enabled {
+  background-color: #c6f6d5;
+  color: #276749;
+}
+
+.status-indicator.disabled {
+  background-color: #fed7d7;
+  color: #9b2c2c;
+}
+
+.balance-cards-container {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.balance-card {
+  flex: 1;
+  min-width: 200px;
+  padding: 16px;
+  border-radius: 4px;
+}
+
+.balance-card.available {
+  background-color: #f0fff4;
+  border: 1px solid #c6f6d5;
+}
+
+.balance-card.pending {
+  background-color: #f7fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.balance-list {
+  list-style: none;
+  padding: 0;
+}
+
+.balance-list li {
+  margin-bottom: 8px;
+  font-size: 1.1em;
+}
+
+.balance-amount {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.payouts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.payouts-table th, .payouts-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.payouts-table th {
+  background-color: #f7f9fc;
+  font-weight: bold;
+}
+
+.status.paid {
+  color: #276749;
+}
+
+.status.pending {
+  color: #9c4221;
+}
+
+.status.failed {
+  color: #9b2c2c;
+}
+
+.actions {
+  margin-top: 16px;
+}
+
+.button {
+  display: inline-block;
+  padding: 8px 16px;
+  background-color: #6772e5;
+  color: white;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.button:hover {
+  background-color: #5469d4;
+}
+
+.fees-summary {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.fee-info {
+  padding: 12px 16px;
+  background-color: #f7f9fc;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.fee-info label {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.fee-percentage {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #6772e5;
+}
+
+.fee-example {
+  background-color: #f7f9fc;
+  padding: 16px;
+  border-radius: 4px;
+  border-left: 4px solid #6772e5;
+}
+</style>

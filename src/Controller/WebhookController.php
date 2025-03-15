@@ -346,15 +346,35 @@ class WebhookController extends ControllerBase {
         return new Response('Vendor not found', 200);
       }
       
-      // Track the payout
-      $this->payoutService->trackPayout($payout, $connection_id, $vendor_id);
+      // Track the payout using the PayoutService
+      $this->payoutService->trackPayout($payout, $connection_id, $vendor_id, $event_type);
       
-      // Log the event
-      $this->logger->info('@event for vendor @vendor_id: @amount', [
+      // Log the event with detailed information
+      $this->logger->info('@event for vendor @vendor_id: @amount @currency (status: @status)', [
         '@event' => $event_type,
         '@vendor_id' => $vendor_id,
         '@amount' => $payout->amount / 100,
+        '@currency' => strtoupper($payout->currency),
+        '@status' => $payout->status,
       ]);
+      
+      // Additional handling based on event type
+      switch ($event_type) {
+        case 'payout.created':
+          // A new payout has been created
+          $this->notifyPayoutCreated($vendor_id, $payout);
+          break;
+        
+        case 'payout.paid':
+          // A payout has successfully been deposited into the vendor's bank account
+          $this->notifyPayoutPaid($vendor_id, $payout);
+          break;
+        
+        case 'payout.failed':
+          // A payout failed to be deposited into the vendor's bank account
+          $this->notifyPayoutFailed($vendor_id, $payout);
+          break;
+      }
       
       return new Response('Payout event processed', 200);
     }
@@ -362,6 +382,92 @@ class WebhookController extends ControllerBase {
       $this->logger->error('Error processing payout event: @message', ['@message' => $e->getMessage()]);
       return new Response('Processing error', 500);
     }
+  }
+
+  /**
+   * Notifies a vendor that a payout has been created.
+   *
+   * @param int $vendor_id
+   *   The vendor user ID.
+   * @param \Stripe\Payout $payout
+   *   The payout object.
+   */
+  protected function notifyPayoutCreated($vendor_id, \Stripe\Payout $payout) {
+    // Load the vendor
+    $vendor = $this->entityTypeManager->getStorage('user')->load($vendor_id);
+    if (!$vendor) {
+      return;
+    }
+    
+    // Add a message to the vendor's dashboard message queue
+    $message = $this->t('A new payout of @amount @currency has been initiated and should arrive in your bank account within 1-2 business days.', [
+      '@amount' => number_format($payout->amount / 100, 2),
+      '@currency' => strtoupper($payout->currency),
+    ]);
+    
+    $this->messenger()->addMessage($message, 'vendor_' . $vendor_id);
+    
+    // Placeholder for email notification to the vendor
+  }
+
+  /**
+   * Notifies a vendor that a payout has been paid.
+   *
+   * @param int $vendor_id
+   *   The vendor user ID.
+   * @param \Stripe\Payout $payout
+   *   The payout object.
+   */
+  protected function notifyPayoutPaid($vendor_id, \Stripe\Payout $payout) {
+    // Load the vendor
+    $vendor = $this->entityTypeManager->getStorage('user')->load($vendor_id);
+    if (!$vendor) {
+      return;
+    }
+    
+    // Add a message to the vendor's dashboard message queue
+    $message = $this->t('Your payout of @amount @currency has been deposited in your bank account.', [
+      '@amount' => number_format($payout->amount / 100, 2),
+      '@currency' => strtoupper($payout->currency),
+    ]);
+    
+    $this->messenger()->addMessage($message, 'vendor_' . $vendor_id);
+    
+    // Placeholder for email notification to the vendor
+  }
+
+  /**
+   * Notifies a vendor that a payout has failed.
+   *
+   * @param int $vendor_id
+   *   The vendor user ID.
+   * @param \Stripe\Payout $payout
+   *   The payout object.
+   */
+  protected function notifyPayoutFailed($vendor_id, \Stripe\Payout $payout) {
+    // Load the vendor
+    $vendor = $this->entityTypeManager->getStorage('user')->load($vendor_id);
+    if (!$vendor) {
+      return;
+    }
+    
+    // Add a message to the vendor's dashboard message queue
+    $message = $this->t('Your payout of @amount @currency has failed. Please check your Stripe dashboard for more information.', [
+      '@amount' => number_format($payout->amount / 100, 2),
+      '@currency' => strtoupper($payout->currency),
+    ]);
+    
+    $this->messenger()->addMessage($message, 'vendor_' . $vendor_id);
+    
+    // Create an alert for the platform admin
+    $this->logger->error('Payout failed for vendor @vendor_id (@name): @amount @currency', [
+      '@vendor_id' => $vendor_id,
+      '@name' => $vendor->getDisplayName(),
+      '@amount' => number_format($payout->amount / 100, 2),
+      '@currency' => strtoupper($payout->currency),
+    ]);
+    
+    // Placeholder email notification to the vendor and admin
   }
 
   /**

@@ -335,7 +335,8 @@ class StripeConnect extends Stripe {
         'amount_to_capture' => $this->minorUnits($amount->getCurrencyCode(), $amount_decimal),
       ];
       
-      $intent = $this->client->paymentIntents->capture($remote_id, $capture_params, $options);
+      // Use stripeApi to get the client and capture the payment
+      $intent = $this->stripeApi->getClient()->paymentIntents->capture($remote_id, $capture_params, $options);
       
       if ($intent->status === 'succeeded') {
         $payment->setState('completed');

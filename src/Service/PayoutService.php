@@ -103,11 +103,11 @@ class PayoutService {
         $params['starting_after'] = $starting_after;
       }
       
-      // For connected accounts, we need to make the API call with the account specified
-      $payouts = $this->stripeApi->getClient()->payouts->all(
-        $params,
-        ['stripe_account' => $account_id]
-      );
+      // For connected accounts, we need to specify the account ID in options
+      $options = ['stripe_account' => $account_id];
+      
+      // Use the stripeApi service to retrieve the payouts
+      $payouts = $this->stripeApi->getClient()->payouts->all($params, $options);
       
       return $payouts;
     }
@@ -140,9 +140,14 @@ class PayoutService {
     try {
       $payout_schedule = ['interval' => $interval] + $schedule_options;
       
-      $account = $this->stripeApi->update('Account', $account_id, [
+      // Update the account with the new payout schedule using direct charges approach
+      $params = [
         'settings' => ['payouts' => ['schedule' => $payout_schedule]]
-      ]);
+      ];
+      $options = ['stripe_account' => $account_id];
+      
+      // Update directly on the connected account
+      $account = $this->stripeApi->update('Account', $account_id, $params, $options);
       
       $this->logger->info('Payout schedule updated for account @id: @interval', [
         '@id' => $account_id,
@@ -183,11 +188,16 @@ class PayoutService {
       // Convert amount to minor units
       $minor_amount = $this->toMinorUnits($amount, $currency);
       
-      $payout = $this->stripeApi->getClient()->payouts->create([
+      // For direct charges model, create the payout directly on the connected account
+      $params = [
         'amount' => $minor_amount,
         'currency' => strtolower($currency),
         'description' => $description,
-      ], ['stripe_account' => $account_id]);
+      ];
+      $options = ['stripe_account' => $account_id];
+      
+      // Create the payout on the connected account
+      $payout = $this->stripeApi->create('Payout', $params, $options);
       
       $this->logger->info('Manual payout created for account @id: @amount @currency', [
         '@id' => $account_id,
@@ -216,16 +226,22 @@ class PayoutService {
    *   The vendor's Stripe account ID.
    * @param int $vendor_id
    *   The vendor's user ID.
+   * @param string $event_type
+   *   The event type that triggered this tracking.
    *
    * @return bool
    *   TRUE if tracking was successful, FALSE otherwise.
    */
-  public function trackPayout(\Stripe\Payout $payout, $account_id, $vendor_id) {
+  public function trackPayout(\Stripe\Payout $payout, $account_id, $vendor_id, $event_type = '') {
     try {
       // Get the tracking state
       $payouts_tracking = $this->state->get('stripe_connect_marketplace.payouts_tracking', []);
       
-      // Add new payout data
+      // Calculate the bank availability date
+      $arrival_date = $payout->arrival_date ?? 0;
+      $estimated_availability = $arrival_date ? $arrival_date : (time() + (2 * 86400)); // Default to 2 days if not provided
+      
+      // Add new payout data with direct charges specific information
       $payouts_tracking[$payout->id] = [
         'id' => $payout->id,
         'account_id' => $account_id,
@@ -234,15 +250,23 @@ class PayoutService {
         'currency' => $payout->currency,
         'status' => $payout->status,
         'created' => $payout->created,
-        'arrival_date' => $payout->arrival_date,
+        'arrival_date' => $arrival_date,
+        'estimated_availability' => $estimated_availability,
+        'destination' => $payout->destination,
+        'failure_code' => $payout->failure_code ?? '',
+        'failure_message' => $payout->failure_message ?? '',
+        'last_event' => $event_type,
+        'last_event_time' => time(),
+        'payment_model' => 'direct_charge', // Mark that this is from direct charge model
       ];
       
       // Save updated tracking data
       $this->state->set('stripe_connect_marketplace.payouts_tracking', $payouts_tracking);
       
-      $this->logger->info('Payout tracked: @id for vendor @vendor_id', [
+      $this->logger->info('Payout tracked: @id for vendor @vendor_id (event: @event)', [
         '@id' => $payout->id,
         '@vendor_id' => $vendor_id,
+        '@event' => $event_type,
       ]);
       
       return TRUE;
@@ -283,18 +307,24 @@ class PayoutService {
     if (!empty($filters)) {
       $payouts = array_filter($payouts, function ($payout) use ($filters) {
         foreach ($filters as $key => $value) {
-          if (isset($payout[$key])) {
-            // Handle date range filters
-            if ($key == 'created_after' && $payout['created'] < $value) {
+          // Handle special filter cases
+          if ($key === 'date_range') {
+            if (isset($value['start']) && $payout['created'] < $value['start']) {
               return FALSE;
             }
-            if ($key == 'created_before' && $payout['created'] > $value) {
+            if (isset($value['end']) && $payout['created'] > $value['end']) {
               return FALSE;
             }
-            // Handle exact match filters
-            if ($key != 'created_after' && $key != 'created_before' && $payout[$key] != $value) {
-              return FALSE;
-            }
+          }
+          elseif ($key === 'min_amount' && isset($payout['amount']) && $payout['amount'] < $value) {
+            return FALSE;
+          }
+          elseif ($key === 'max_amount' && isset($payout['amount']) && $payout['amount'] > $value) {
+            return FALSE;
+          }
+          elseif (isset($payout[$key]) && $payout[$key] != $value) {
+            // Standard equality filter
+            return FALSE;
           }
         }
         return TRUE;
@@ -307,6 +337,135 @@ class PayoutService {
     });
     
     return $payouts;
+  }
+
+  /**
+   * Gets application fee data for a connected account.
+   *
+   * @param string $account_id
+   *   The vendor's Stripe account ID.
+   * @param array $params
+   *   Query parameters for filtering (date, limit, etc.).
+   *
+   * @return array
+   *   Array of application fee data.
+   */
+  public function getApplicationFees($account_id, array $params = []) {
+    try {
+      // Set default parameters
+      $default_params = [
+        'limit' => 25,
+      ];
+      $query_params = array_merge($default_params, $params);
+      
+      // For direct charges, fees are collected from connected accounts
+      if ($account_id) {
+        $query_params['connected_account'] = $account_id;
+      }
+      
+      // Get application fees data
+      $fees = $this->stripeApi->getClient()->applicationFees->all($query_params);
+      
+      // Format the fees data for use in Drupal
+      $formatted_fees = [];
+      foreach ($fees->data as $fee) {
+        $formatted_fees[] = [
+          'id' => $fee->id,
+          'account_id' => $fee->account,
+          'amount' => $fee->amount / 100,
+          'currency' => $fee->currency,
+          'created' => $fee->created,
+          'charge_id' => $fee->charge,
+          'refunded' => $fee->refunded,
+          'amount_refunded' => $fee->amount_refunded / 100,
+        ];
+      }
+      
+      return $formatted_fees;
+    }
+    catch (\Stripe\Exception\ApiErrorException $e) {
+      $this->logger->error('Stripe API Error fetching application fees: @message', ['@message' => $e->getMessage()]);
+      return [];
+    }
+  }
+
+  /**
+   * Gets payout summary data for a connected account.
+   *
+   * @param string $account_id
+   *   The vendor's Stripe account ID.
+   * @param int $start_date
+   *   Unix timestamp for the start date.
+   * @param int $end_date
+   *   Unix timestamp for the end date.
+   *
+   * @return array
+   *   Array with summary data like total_paid, total_pending, etc.
+   */
+  public function getPayoutSummary($account_id, $start_date = NULL, $end_date = NULL) {
+    // Get payouts that match the date range
+    $filters = [];
+    if ($start_date || $end_date) {
+      $filters['date_range'] = [];
+      if ($start_date) {
+        $filters['date_range']['start'] = $start_date;
+      }
+      if ($end_date) {
+        $filters['date_range']['end'] = $end_date;
+      }
+    }
+    
+    $payouts = $this->getTrackedPayouts($account_id ? $this->getVendorIdFromAccount($account_id) : NULL, $filters);
+    
+    // Calculate summary data
+    $summary = [
+      'total_count' => count($payouts),
+      'total_paid' => 0,
+      'total_pending' => 0,
+      'total_failed' => 0,
+      'currencies' => [],
+      'status_counts' => [
+        'paid' => 0,
+        'pending' => 0,
+        'in_transit' => 0,
+        'canceled' => 0,
+        'failed' => 0,
+      ],
+    ];
+    
+    foreach ($payouts as $payout) {
+      // Initialize currency if not exists
+      $currency = strtoupper($payout['currency']);
+      if (!isset($summary['currencies'][$currency])) {
+        $summary['currencies'][$currency] = [
+          'total_paid' => 0,
+          'total_pending' => 0,
+          'total_failed' => 0,
+        ];
+      }
+      
+      // Track status counts
+      if (isset($summary['status_counts'][$payout['status']])) {
+        $summary['status_counts'][$payout['status']]++;
+      }
+      
+      // Track amounts by status
+      if ($payout['status'] === 'paid') {
+        $summary['total_paid'] += $payout['amount'];
+        $summary['currencies'][$currency]['total_paid'] += $payout['amount'];
+      }
+      elseif ($payout['status'] === 'failed') {
+        $summary['total_failed'] += $payout['amount'];
+        $summary['currencies'][$currency]['total_failed'] += $payout['amount'];
+      }
+      else {
+        // Any other status is considered pending
+        $summary['total_pending'] += $payout['amount'];
+        $summary['currencies'][$currency]['total_pending'] += $payout['amount'];
+      }
+    }
+    
+    return $summary;
   }
 
   /**
@@ -328,5 +487,33 @@ class PayoutService {
       'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
     ];
     return in_array($currency_code, $zero_decimal_currencies) ? (int) $amount : (int) ($amount * 100);
+  }
+
+  /**
+   * Gets the vendor ID from a Stripe account ID.
+   *
+   * @param string $account_id
+   *   The Stripe account ID.
+   *
+   * @return int|null
+   *   The vendor user ID, or NULL if not found.
+   */
+  protected function getVendorIdFromAccount($account_id) {
+    try {
+      $users = $this->entityTypeManager->getStorage('user')->loadByProperties([
+        'field_stripe_account_id' => $account_id,
+        'status' => 1,
+      ]);
+      
+      if (!empty($users)) {
+        $user = reset($users);
+        return $user->id();
+      }
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error looking up vendor: @message', ['@message' => $e->getMessage()]);
+    }
+    
+    return NULL;
   }
 }

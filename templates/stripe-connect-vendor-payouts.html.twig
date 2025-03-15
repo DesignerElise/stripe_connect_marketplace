@@ -1,26 +1,344 @@
+{#
+/**
+ * @file
+ * Template for displaying detailed Stripe Connect vendor payouts.
+ *
+ * Available variables:
+ * - vendor: The vendor information.
+ *   - uid: The vendor user ID.
+ *   - name: The vendor display name.
+ *   - email: The vendor email address.
+ * - payouts: List of vendor payouts.
+ * - stripe_connect: Stripe Connect configuration including application_fee_percent.
+ */
+#}
+
 <div class="stripe-connect-vendor-payouts">
-    <h1>Payouts for {{ vendor.name }}</h1>
-    
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Amount</th>
-          <th>Currency</th>
-          <th>Status</th>
-          <th>Method</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for payout in payouts %}
-          <tr>
-            <td>{{ payout.created|date('Y-m-d H:i:s') }}</td>
-            <td>{{ payout.amount / 100 }}</td>
-            <td>{{ payout.currency|upper }}</td>
-            <td>{{ payout.status }}</td>
-            <td>{{ payout.method }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <h1>{{ 'Payouts for'|t }} {{ vendor.name }}</h1>
+  
+  <div class="direct-charges-info">
+    <p>{{ 'With direct charges, payouts are sent directly from Stripe to the vendor\'s bank account based on their payout schedule. These payouts are managed by Stripe, not your platform.'|t }}</p>
   </div>
+  
+  <div class="vendor-info-panel">
+    <div class="vendor-info">
+      <h2>{{ 'Vendor Information'|t }}</h2>
+      <div class="info-row">
+        <label>{{ 'Name:'|t }}</label>
+        <span>{{ vendor.name }}</span>
+      </div>
+      <div class="info-row">
+        <label>{{ 'Email:'|t }}</label>
+        <span>{{ vendor.email }}</span>
+      </div>
+      <div class="info-row">
+        <label>{{ 'User ID:'|t }}</label>
+        <span>{{ vendor.uid }}</span>
+      </div>
+    </div>
+    
+    <div class="actions">
+      <a href="{{ path('stripe_connect_marketplace.view_vendor', {'user': vendor.uid}) }}" class="button">{{ 'Back to Vendor Details'|t }}</a>
+      <a href="https://dashboard.stripe.com/connect/transfers" class="button" target="_blank">{{ 'View in Stripe'|t }}</a>
+    </div>
+  </div>
+  
+  <div class="payouts-container">
+    <h2>{{ 'Payout History'|t }}</h2>
+    
+    {% if payouts %}
+      <div class="payouts-table-container">
+        <table class="payouts-table">
+          <thead>
+            <tr>
+              <th>{{ 'Date'|t }}</th>
+              <th>{{ 'Amount'|t }}</th>
+              <th>{{ 'Currency'|t }}</th>
+              <th>{{ 'Status'|t }}</th>
+              <th>{{ 'Method'|t }}</th>
+              <th>{{ 'Arrival Date'|t }}</th>
+              <th>{{ 'Details'|t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for payout in payouts %}
+              <tr class="payout-row status-{{ payout.status }}">
+                <td class="date">
+                  <span class="value">{{ payout.created|date('Y-m-d') }}</span>
+                  <span class="detail">{{ payout.created|date('H:i:s') }}</span>
+                </td>
+                <td class="amount">{{ payout.amount / 100|number_format(2) }}</td>
+                <td class="currency">{{ payout.currency|upper }}</td>
+                <td class="status">
+                  <span class="status-badge status-{{ payout.status }}">
+                    {{ payout.status|capitalize }}
+                  </span>
+                </td>
+                <td class="method">{{ payout.method|default('standard')|capitalize }}</td>
+                <td class="arrival-date">
+                  {% if payout.arrival_date %}
+                    {{ payout.arrival_date|date('Y-m-d') }}
+                  {% else %}
+                    <span class="pending">{{ 'Pending'|t }}</span>
+                  {% endif %}
+                </td>
+                <td class="actions">
+                  <a href="#" class="toggle-details" data-payout-id="{{ payout.id }}">{{ 'View'|t }}</a>
+                </td>
+              </tr>
+              <tr class="payout-details-row" id="payout-details-{{ payout.id }}" style="display: none;">
+                <td colspan="7">
+                  <div class="payout-details">
+                    <div class="detail-row">
+                      <label>{{ 'Payout ID:'|t }}</label>
+                      <span>{{ payout.id }}</span>
+                    </div>
+                    <div class="detail-row">
+                      <label>{{ 'Description:'|t }}</label>
+                      <span>{{ payout.description|default('STRIPE PAYOUT')|capitalize }}</span>
+                    </div>
+                    <div class="detail-row">
+                      <label>{{ 'Statement Descriptor:'|t }}</label>
+                      <span>{{ payout.statement_descriptor|default('STRIPE PAYOUT') }}</span>
+                    </div>
+                    <div class="detail-row">
+                      <label>{{ 'Failure Message:'|t }}</label>
+                      <span>{{ payout.failure_message|default('None') }}</span>
+                    </div>
+                    <div class="detail-row">
+                      <label>{{ 'Direct Charges Model:'|t }}</label>
+                      <span>{{ 'Payout sent directly from Stripe to vendor\'s bank account'|t }}</span>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="payout-footnotes">
+        <h3>{{ 'About Direct Charges Payouts'|t }}</h3>
+        <p>{{ 'With the direct charges model, the following applies:'|t }}</p>
+        <ul>
+          <li>{{ 'Vendors collect payments directly through their Stripe Connect accounts'|t }}</li>
+          <li>{{ 'Your platform collects a %fee% fee automatically on each transaction'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</li>
+          <li>{{ 'Stripe handles payouts directly to the vendor\'s bank account'|t }}</li>
+          <li>{{ 'The vendor\'s payout schedule can be configured in their Stripe Dashboard'|t }}</li>
+        </ul>
+      </div>
+    {% else %}
+      <div class="no-payouts-message">
+        <p>{{ 'No payouts found for this vendor.'|t }}</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add toggle functionality for payout details
+    const toggleButtons = document.querySelectorAll('.toggle-details');
+    
+    toggleButtons.forEach(button => {
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        const payoutId = this.getAttribute('data-payout-id');
+        const detailsRow = document.getElementById('payout-details-' + payoutId);
+        
+        if (detailsRow.style.display === 'none') {
+          detailsRow.style.display = 'table-row';
+          this.textContent = 'Hide';
+        } else {
+          detailsRow.style.display = 'none';
+          this.textContent = 'View';
+        }
+      });
+    });
+  });
+</script>
+
+<style>
+.stripe-connect-vendor-payouts {
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.direct-charges-info {
+  background-color: #f7f9fc;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 24px;
+  border-left: 4px solid #6772e5;
+}
+
+.vendor-info-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  background-color: #f7f9fc;
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 30px;
+  border: 1px solid #e0e0e0;
+}
+
+.info-row {
+  margin-bottom: 8px;
+}
+
+.info-row label {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.button {
+  display: inline-block;
+  padding: 8px 16px;
+  background-color: #6772e5;
+  color: white;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.button:hover {
+  background-color: #5469d4;
+}
+
+.payouts-table-container {
+  overflow-x: auto;
+  margin-bottom: 30px;
+}
+
+.payouts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.payouts-table th,
+.payouts-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.payouts-table th {
+  background-color: #f7f9fc;
+  font-weight: bold;
+}
+
+.payout-row {
+  background-color: white;
+}
+
+.payout-row:hover {
+  background-color: #f7fafc;
+}
+
+.payout-row.status-paid {
+  border-left: 3px solid #68d391;
+}
+
+.payout-row.status-pending {
+  border-left: 3px solid #f6ad55;
+}
+
+.payout-row.status-failed {
+  border-left: 3px solid #fc8181;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: bold;
+}
+
+.status-badge.status-paid {
+  background-color: #c6f6d5;
+  color: #276749;
+}
+
+.status-badge.status-pending {
+  background-color: #feebc8;
+  color: #9c4221;
+}
+
+.status-badge.status-failed {
+  background-color: #fed7d7;
+  color: #9b2c2c;
+}
+
+.status-badge.status-canceled {
+  background-color: #e2e8f0;
+  color: #4a5568;
+}
+
+.date .detail {
+  display: block;
+  font-size: 0.8em;
+  color: #718096;
+}
+
+.toggle-details {
+  color: #6772e5;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.payout-details {
+  background-color: #f7fafc;
+  padding: 16px;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.detail-row {
+  margin-bottom: 8px;
+  display: flex;
+}
+
+.detail-row label {
+  font-weight: bold;
+  width: 180px;
+  margin-right: 8px;
+}
+
+.payout-footnotes {
+  background-color: #f7f9fc;
+  padding: 16px;
+  border-radius: 4px;
+  margin-top: 30px;
+}
+
+.payout-footnotes h3 {
+  margin-top: 0;
+  color: #4a5568;
+}
+
+.payout-footnotes ul {
+  padding-left: 20px;
+}
+
+.payout-footnotes li {
+  margin-bottom: 8px;
+}
+
+.no-payouts-message {
+  padding: 40px;
+  text-align: center;
+  background-color: #f7fafc;
+  border-radius: 4px;
+  border: 1px dashed #cbd5e0;
+}
+</style>

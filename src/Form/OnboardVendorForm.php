@@ -10,9 +10,10 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\stripe_connect_marketplace\Service\PaymentService;
+use Drupal\Core\Config\ConfigFactoryInterface;
 
 /**
- * Form for onboarding vendors to Stripe Connect.
+ * Form for onboarding vendors to Stripe Connect with direct charges support.
  */
 class OnboardVendorForm extends FormBase {
 
@@ -45,6 +46,13 @@ class OnboardVendorForm extends FormBase {
   protected $paymentService;
 
   /**
+   * The config factory.
+   *
+   * @var \Drupal\Core\Config\ConfigFactoryInterface
+   */
+  protected $configFactory;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
@@ -52,7 +60,8 @@ class OnboardVendorForm extends FormBase {
       $container->get('logger.factory'),
       $container->get('entity_type.manager'),
       $container->get('current_user'),
-      $container->get('stripe_connect_marketplace.payment_service')
+      $container->get('stripe_connect_marketplace.payment_service'),
+      $container->get('config.factory')
     );
   }
 
@@ -67,17 +76,21 @@ class OnboardVendorForm extends FormBase {
    *   The current user.
    * @param \Drupal\stripe_connect_marketplace\Service\PaymentService $payment_service
    *   The payment service.
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
+   *   The configuration factory.
    */
   public function __construct(
     LoggerChannelFactoryInterface $logger_factory,
     EntityTypeManagerInterface $entity_type_manager,
     AccountProxyInterface $current_user,
-    PaymentService $payment_service
+    PaymentService $payment_service,
+    ConfigFactoryInterface $config_factory
   ) {
     $this->logger = $logger_factory->get('stripe_connect_marketplace');
     $this->entityTypeManager = $entity_type_manager;
     $this->currentUser = $current_user;
     $this->paymentService = $payment_service;
+    $this->configFactory = $config_factory;
   }
 
   /**
@@ -102,7 +115,7 @@ class OnboardVendorForm extends FormBase {
     
     // Check if user already has a Stripe account
     if ($user->hasField('field_stripe_account_id') && !$user->get('field_stripe_account_id')->isEmpty()) {
-      $this->messenger()->addWarning($this->t('You already have a Stripe account connected.'));
+      $this->messenger()->addWarning($this->t('You already have a Stripe Connect account.'));
       $form['account_exists'] = [
         '#markup' => $this->t('<p>You already have a Stripe Connect account. <a href="@dashboard_url">Go to your vendor dashboard</a>.</p>', [
           '@dashboard_url' => Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->toString(),
@@ -111,6 +124,16 @@ class OnboardVendorForm extends FormBase {
       return $form;
     }
     
+    // Get marketplace fee percentage for display
+    $config = $this->configFactory->get('stripe_connect_marketplace.settings');
+    $fee_percent = $config->get('stripe_connect.application_fee_percent');
+    
+    $form['direct_charges_info'] = [
+      '#type' => 'markup',
+      '#markup' => $this->t('<div class="direct-charges-info"><h2>Become a Vendor with Direct Payments</h2><p>As a vendor in our marketplace, you will be able to receive payments directly to your Stripe account. Our platform adds a <strong>@fee%</strong> fee to each transaction.</p><p>To get started, you will need to create a Stripe Connect account and connect it to our platform.</p></div>', 
+        ['@fee' => $fee_percent]),
+    ];
+
     $form['vendor_info'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Vendor Information'),
@@ -133,6 +156,14 @@ class OnboardVendorForm extends FormBase {
         'CA' => $this->t('Canada'),
         'GB' => $this->t('United Kingdom'),
         'AU' => $this->t('Australia'),
+        'DE' => $this->t('Germany'),
+        'FR' => $this->t('France'),
+        'IT' => $this->t('Italy'),
+        'ES' => $this->t('Spain'),
+        'NL' => $this->t('Netherlands'),
+        'BE' => $this->t('Belgium'),
+        'AT' => $this->t('Austria'),
+        'CH' => $this->t('Switzerland'),
         // Add more countries as needed
       ],
       '#default_value' => 'US',
@@ -152,6 +183,23 @@ class OnboardVendorForm extends FormBase {
       '#description' => $this->t('Select your business structure.'),
     ];
     
+    $form['capabilities'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Account Capabilities'),
+      '#description' => $this->t('These capabilities will be requested for your Stripe account.'),
+      '#open' => TRUE,
+    ];
+    
+    $form['capabilities']['info'] = [
+      '#markup' => $this->t('
+        <div class="capabilities-info">
+          <p><strong>Card Payments:</strong> Accept credit and debit card payments directly to your account.</p>
+          <p><strong>Transfers:</strong> Receive funds via transfers and payouts.</p>
+          <p><strong>Platform Fee:</strong> Our platform will automatically collect a @fee% fee on each transaction.</p>
+        </div>
+      ', ['@fee' => $fee_percent]),
+    ];
+    
     $form['vendor_agreement'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('I agree to the <a href="@terms_url" target="_blank">Vendor Terms and Conditions</a> and the <a href="@stripe_url" target="_blank">Stripe Connected Account Agreement</a>.', [
@@ -168,7 +216,13 @@ class OnboardVendorForm extends FormBase {
     $form['actions']['submit'] = [
       '#type' => 'submit',
       '#value' => $this->t('Continue to Stripe Onboarding'),
+      '#attributes' => [
+        'class' => ['button--primary'],
+      ],
     ];
+    
+    // Attach custom styles
+    $form['#attached']['library'][] = 'stripe_connect_marketplace/vendor_terms';
     
     return $form;
   }
@@ -208,17 +262,38 @@ class OnboardVendorForm extends FormBase {
       // Load the user
       $user = $this->entityTypeManager->getStorage('user')->load($this->currentUser->id());
       
-      // Prepare additional account data
+      // Prepare additional account data for direct charges model
       $account_data = [
         'business_type' => $business_type,
+        'capabilities' => [
+          'card_payments' => ['requested' => true],
+          'transfers' => ['requested' => true],
+        ],
+        'business_profile' => [
+          'mcc' => '5734', // Computer Software Stores (default, can be changed)
+          'url' => \Drupal::request()->getSchemeAndHttpHost(),
+        ],
+        'settings' => [
+          'payouts' => [
+            'schedule' => [
+              'interval' => 'daily',
+            ],
+          ],
+        ],
       ];
       
-      // Create Stripe Connect account
+      // Create Stripe Connect account with Express account type for direct charges
       $account = $this->paymentService->createConnectAccount($email, $country, $account_data);
       
       // Save Stripe account ID to user
       if ($user->hasField('field_stripe_account_id')) {
         $user->set('field_stripe_account_id', $account->id);
+        
+        // Set initial vendor status
+        if ($user->hasField('field_vendor_status')) {
+          $user->set('field_vendor_status', 'pending');
+        }
+        
         $user->save();
         
         $this->logger->info('Created Stripe Connect account for user @uid: @account_id', [

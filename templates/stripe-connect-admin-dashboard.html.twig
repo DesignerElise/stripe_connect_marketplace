@@ -10,6 +10,7 @@
  *   - pending: List of pending balances by currency.
  * - payouts: List of recent payouts.
  * - environment: The Stripe environment ('test' or 'live').
+ * - stripe_connect: Stripe Connect configuration including application_fee_percent.
  */
 #}
 
@@ -30,7 +31,7 @@
 
   <div class="marketplace-info">
     <h3>{{ 'Marketplace Information'|t }}</h3>
-    <p>{{ 'Your marketplace is configured to allow vendors to collect payments directly. A platform fee of %fee% is automatically collected on each transaction.'|t({'%fee%': config.get('stripe_connect.application_fee_percent') ~ '%'}) }}</p>
+    <p>{{ 'Your marketplace is configured to allow vendors to collect payments directly. A platform fee of %fee% is automatically collected on each transaction.'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</p>
   </div>
 
   <div class="admin-vendor-list">
