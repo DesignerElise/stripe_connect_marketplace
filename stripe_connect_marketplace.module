@@ -565,8 +565,6 @@ function stripe_connect_marketplace_preprocess_page(&$variables) {
   }
 }
 
-# These route alterations should be implemented in your hook_menu_alter() in the module file
-
 /**
  * Implements hook_menu_alter().
  */

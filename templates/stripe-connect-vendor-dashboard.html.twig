@@ -15,6 +15,8 @@
  *   - pending: List of pending balances by currency.
  * - payouts: List of recent payouts.
  * - user: The vendor user entity.
+ * - action_buttons: Action buttons for the vendor dashboard.
+ * - vendor_links: Array of links to vendor-related pages.
  * - stripe_connect: Stripe Connect configuration including application_fee_percent.
  */
 #}
@@ -22,134 +24,396 @@
 <div class="stripe-connect-vendor-dashboard">
   <h2>{{ 'Vendor Dashboard'|t }}</h2>
   
-  <div class="vendor-dashboard-info">
-    <p>{{ 'As a vendor in our marketplace, you collect payments directly through your Stripe Connect account. Our platform adds a %fee% fee to each transaction to cover operational costs.'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</p>
-  </div>
-
-  <div class="vendor-account-status">
-    <h3>{{ 'Account Status'|t }}</h3>
-    <div class="account-info">
-      <div class="account-field">
-        <span class="label">{{ 'Account ID:'|t }}</span>
-        <span class="value">{{ account.id }}</span>
-      </div>
-      
-      <div class="account-field">
-        <span class="label">{{ 'Charges Enabled:'|t }}</span>
-        <span class="value">
-          {% if account.charges_enabled %}
-            <span class="status enabled">{{ 'Yes'|t }}</span>
-          {% else %}
-            <span class="status disabled">{{ 'No'|t }}</span>
-            <p class="status-description">{{ 'You cannot process payments until charges are enabled.'|t }}</p>
-          {% endif %}
-        </span>
-      </div>
-      
-      <div class="account-field">
-        <span class="label">{{ 'Payouts Enabled:'|t }}</span>
-        <span class="value">
-          {% if account.payouts_enabled %}
-            <span class="status enabled">{{ 'Yes'|t }}</span>
-          {% else %}
-            <span class="status disabled">{{ 'No'|t }}</span>
-            <p class="status-description">{{ 'You cannot receive payouts until they are enabled.'|t }}</p>
-          {% endif %}
-        </span>
-      </div>
-      
-      <div class="account-field">
-        <span class="label">{{ 'Onboarding Complete:'|t }}</span>
-        <span class="value">
-          {% if account.details_submitted %}
-            <span class="status enabled">{{ 'Yes'|t }}</span>
-          {% else %}
-            <span class="status disabled">{{ 'No'|t }}</span>
-            <p class="status-description">{{ 'Please complete your onboarding to access all features.'|t }}</p>
-          {% endif %}
-        </span>
-      </div>
-      
-      {% if not account.details_submitted %}
-        <div class="account-action">
-          <a href="{{ path('stripe_connect_marketplace.onboard_vendor') }}" class="button">{{ 'Complete Onboarding'|t }}</a>
+  {# Display action buttons #}
+  {% if action_buttons %}
+    <div class="vendor-action-buttons">
+      {% for button in action_buttons %}
+        <a href="{{ button.url }}" class="action-button {{ button.button_class }}">
+          <span class="icon icon-{{ button.icon }}"></span>
+          {{ button.title }}
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+  
+  <div class="vendor-dashboard-layout">
+    {# Sidebar navigation #}
+    <div class="vendor-dashboard-sidebar">
+      <div class="vendor-sidebar-nav">
+        <div class="item-list">
+          <h3>{{ 'Vendor Menu'|t }}</h3>
+          <ul>
+            <li>
+              <a href="{{ path('stripe_connect_marketplace.vendor_dashboard') }}" class="vendor-nav-item vendor-dashboard">
+                {{ 'Dashboard'|t }}
+              </a>
+            </li>
+            <li>
+              <a href="{{ path('stripe_connect_marketplace.stripe_dashboard_redirect') }}" class="vendor-nav-item stripe-dashboard" target="_blank">
+                {{ 'Stripe Dashboard'|t }}
+              </a>
+            </li>
+            {% if vendor_links.stores_url %}
+            <li>
+              <a href="{{ vendor_links.stores_url }}" class="vendor-nav-item vendor-stores">
+                {{ 'My Stores'|t }}
+              </a>
+            </li>
+            {% endif %}
+            {% if vendor_links.products_url %}
+            <li>
+              <a href="{{ vendor_links.products_url }}" class="vendor-nav-item vendor-products">
+                {{ 'My Products'|t }}
+              </a>
+            </li>
+            {% endif %}
+            {% if vendor_links.orders_url %}
+            <li>
+              <a href="{{ vendor_links.orders_url }}" class="vendor-nav-item vendor-orders">
+                {{ 'My Orders'|t }}
+              </a>
+            </li>
+            {% endif %}
+          </ul>
         </div>
-      {% endif %}
+      </div>
     </div>
-  </div>
-
-  <div class="vendor-balance">
-    <h3>{{ 'Balance'|t }}</h3>
-    <p>{{ 'This reflects your current balance in your Stripe Connect account.'|t }}</p>
     
-    <div class="balance-section">
-      <h4>{{ 'Available'|t }}</h4>
-      {% if balance.available %}
-        <ul class="balance-list">
-          {% for amount in balance.available %}
+    {# Main content #}
+    <div class="vendor-dashboard-content">
+      <div class="vendor-dashboard-info">
+        <p>{{ 'As a vendor in our marketplace, you collect payments directly through your Stripe Connect account. Our platform adds a %fee% fee to each transaction to cover operational costs.'|t({'%fee%': stripe_connect.application_fee_percent ~ '%'}) }}</p>
+      </div>
+
+      <div class="vendor-account-status">
+        <h3>{{ 'Account Status'|t }}</h3>
+        <div class="account-info">
+          <div class="account-field">
+            <span class="label">{{ 'Account ID:'|t }}</span>
+            <span class="value">{{ account.id }}</span>
+          </div>
+          
+          <div class="account-field">
+            <span class="label">{{ 'Charges Enabled:'|t }}</span>
+            <span class="value">
+              {% if account.charges_enabled %}
+                <span class="status enabled">{{ 'Yes'|t }}</span>
+              {% else %}
+                <span class="status disabled">{{ 'No'|t }}</span>
+                <p class="status-description">{{ 'You cannot process payments until charges are enabled.'|t }}</p>
+              {% endif %}
+            </span>
+          </div>
+          
+          <div class="account-field">
+            <span class="label">{{ 'Payouts Enabled:'|t }}</span>
+            <span class="value">
+              {% if account.payouts_enabled %}
+                <span class="status enabled">{{ 'Yes'|t }}</span>
+              {% else %}
+                <span class="status disabled">{{ 'No'|t }}</span>
+                <p class="status-description">{{ 'You cannot receive payouts until they are enabled.'|t }}</p>
+              {% endif %}
+            </span>
+          </div>
+          
+          <div class="account-field">
+            <span class="label">{{ 'Onboarding Complete:'|t }}</span>
+            <span class="value">
+              {% if account.details_submitted %}
+                <span class="status enabled">{{ 'Yes'|t }}</span>
+              {% else %}
+                <span class="status disabled">{{ 'No'|t }}</span>
+                <p class="status-description">{{ 'Please complete your onboarding to access all features.'|t }}</p>
+              {% endif %}
+            </span>
+          </div>
+          
+          {% if not account.details_submitted %}
+            <div class="account-action">
+              <a href="{{ path('stripe_connect_marketplace.onboard_vendor') }}" class="button">{{ 'Complete Onboarding'|t }}</a>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="vendor-balance">
+        <h3>{{ 'Balance'|t }}</h3>
+        <p>{{ 'This reflects your current balance in your Stripe Connect account.'|t }}</p>
+        
+        <div class="balance-section">
+          <h4>{{ 'Available'|t }}</h4>
+          {% if balance.available %}
+            <ul class="balance-list">
+              {% for amount in balance.available %}
+                <li>
+                  <strong>{{ amount.amount|number_format(2) }}</strong> {{ amount.currency }}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p>{{ 'No available balance.'|t }}</p>
+          {% endif %}
+        </div>
+        
+        <div class="balance-section">
+          <h4>{{ 'Pending'|t }}</h4>
+          {% if balance.pending %}
+            <ul class="balance-list">
+              {% for amount in balance.pending %}
+                <li>
+                  <strong>{{ amount.amount|number_format(2) }}</strong> {{ amount.currency }}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p>{{ 'No pending balance.'|t }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="vendor-payouts">
+        <h3>{{ 'Recent Payouts'|t }}</h3>
+        <p>{{ 'Payouts are sent directly from your Stripe account to your bank account based on your payout schedule.'|t }}</p>
+        
+        {% if payouts %}
+          <table class="payouts-table">
+            <thead>
+              <tr>
+                <th>{{ 'Date'|t }}</th>
+                <th>{{ 'Amount'|t }}</th>
+                <th>{{ 'Status'|t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for payout in payouts %}
+                <tr>
+                  <td>{{ payout.created|date('Y-m-d H:i:s') }}</td>
+                  <td>{{ (payout.amount / 100)|number_format(2) }} {{ payout.currency|upper }}</td>
+                  <td>{{ payout.status }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p>{{ 'No recent payouts.'|t }}</p>
+        {% endif %}
+      </div>
+
+      <div class="vendor-dashboard-actions">
+        <h3>{{ 'Actions'|t }}</h3>
+        <p>{{ 'For detailed payment information and account settings, visit your Stripe Dashboard.'|t }}</p>
+        <ul class="action-links">
+          {% if account.dashboard_url %}
             <li>
-              <strong>{{ amount.amount|number_format(2) }}</strong> {{ amount.currency }}
+              <a href="{{ account.dashboard_url }}" class="button button--primary" target="_blank">{{ 'Access Stripe Dashboard'|t }}</a>
             </li>
-          {% endfor %}
+          {% endif %}
         </ul>
-      {% else %}
-        <p>{{ 'No available balance.'|t }}</p>
-      {% endif %}
+      </div>
     </div>
-    
-    <div class="balance-section">
-      <h4>{{ 'Pending'|t }}</h4>
-      {% if balance.pending %}
-        <ul class="balance-list">
-          {% for amount in balance.pending %}
-            <li>
-              <strong>{{ amount.amount|number_format(2) }}</strong> {{ amount.currency }}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p>{{ 'No pending balance.'|t }}</p>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="vendor-payouts">
-    <h3>{{ 'Recent Payouts'|t }}</h3>
-    <p>{{ 'Payouts are sent directly from your Stripe account to your bank account based on your payout schedule.'|t }}</p>
-    
-    {% if payouts %}
-      <table class="payouts-table">
-        <thead>
-          <tr>
-            <th>{{ 'Date'|t }}</th>
-            <th>{{ 'Amount'|t }}</th>
-            <th>{{ 'Status'|t }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for payout in payouts %}
-            <tr>
-              <td>{{ payout.created|date('Y-m-d H:i:s') }}</td>
-              <td>{{ (payout.amount / 100)|number_format(2) }} {{ payout.currency|upper }}</td>
-              <td>{{ payout.status }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>{{ 'No recent payouts.'|t }}</p>
-    {% endif %}
-  </div>
-
-  <div class="vendor-dashboard-actions">
-    <h3>{{ 'Actions'|t }}</h3>
-    <p>{{ 'For detailed payment information and account settings, visit your Stripe Dashboard.'|t }}</p>
-    <ul class="action-links">
-      {% if account.dashboard_url %}
-        <li>
-          <a href="{{ account.dashboard_url }}" class="button button--primary" target="_blank">{{ 'Access Stripe Dashboard'|t }}</a>
-        </li>
-      {% endif %}
-    </ul>
   </div>
 </div>
+
+<style>
+/* Layout styles */
+.vendor-dashboard-layout {
+  display: flex;
+  gap: 30px;
+  margin-top: 20px;
+}
+
+.vendor-dashboard-sidebar {
+  flex: 0 0 250px;
+}
+
+.vendor-dashboard-content {
+  flex: 1;
+}
+
+/* Action buttons styles */
+.vendor-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.vendor-action-buttons .action-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #6772e5;
+  color: white;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.vendor-action-buttons .action-button:hover,
+.vendor-action-buttons .action-button:focus {
+  background-color: #5469d4;
+  color: white;
+  text-decoration: none;
+}
+
+.vendor-action-buttons .action-button .icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+/* Button variations */
+.vendor-action-buttons .add-store-button {
+  background-color: #38a169;
+}
+
+.vendor-action-buttons .add-store-button:hover,
+.vendor-action-buttons .add-store-button:focus {
+  background-color: #2f855a;
+}
+
+.vendor-action-buttons .add-product-button {
+  background-color: #4299e1;
+}
+
+.vendor-action-buttons .add-product-button:hover,
+.vendor-action-buttons .add-product-button:focus {
+  background-color: #3182ce;
+}
+
+.vendor-action-buttons .manage-store-button {
+  background-color: #ed8936;
+}
+
+.vendor-action-buttons .manage-store-button:hover,
+.vendor-action-buttons .manage-store-button:focus {
+  background-color: #dd6b20;
+}
+
+/* Sidebar styles */
+.vendor-sidebar-nav {
+  background-color: #f7f9fc;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  padding: 0;
+  margin-bottom: 20px;
+}
+
+.vendor-sidebar-nav h3 {
+  background-color: #6772e5;
+  color: white;
+  padding: 12px 15px;
+  margin: 0;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.vendor-sidebar-nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vendor-sidebar-nav li {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.vendor-sidebar-nav li:last-child {
+  border-bottom: none;
+}
+
+.vendor-sidebar-nav li a {
+  display: block;
+  padding: 12px 15px;
+  text-decoration: none;
+  color: #333;
+  transition: background-color 0.2s ease;
+}
+
+.vendor-sidebar-nav li a:hover,
+.vendor-sidebar-nav li a:focus {
+  background-color: #f0f0f0;
+  color: #6772e5;
+  text-decoration: none;
+}
+
+.vendor-sidebar-nav li a.is-active {
+  background-color: #e6ebf8;
+  color: #6772e5;
+  font-weight: bold;
+  border-left: 3px solid #6772e5;
+}
+
+/* Icons */
+.vendor-dashboard::before {
+  content: "📊";
+  margin-right: 8px;
+}
+
+.stripe-dashboard::before {
+  content: "💳";
+  margin-right: 8px;
+}
+
+.vendor-stores::before {
+  content: "🏪";
+  margin-right: 8px;
+}
+
+.vendor-products::before {
+  content: "📦";
+  margin-right: 8px;
+}
+
+.vendor-orders::before {
+  content: "🛒";
+  margin-right: 8px;
+}
+
+.icon-store:before {
+  content: "🏪";
+}
+
+.icon-product:before {
+  content: "📦";
+}
+
+.icon-settings:before {
+  content: "⚙️";
+}
+
+.icon-inventory:before {
+  content: "📋";
+}
+
+.icon-orders:before {
+  content: "🛒";
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .vendor-dashboard-layout {
+    flex-direction: column;
+  }
+  
+  .vendor-dashboard-sidebar {
+    flex: 0 0 auto;
+  }
+  
+  .vendor-action-buttons {
+    flex-direction: column;
+  }
+  
+  .vendor-action-buttons .action-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+</style>
