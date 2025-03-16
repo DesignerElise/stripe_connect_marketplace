@@ -62,3 +62,12 @@ services:
     arguments:
       - '@entity_type.manager'
       - '@current_user'
+
+  stripe_connect_marketplace.vendor_store_access:
+    class: Drupal\stripe_connect_marketplace\Access\VendorStoreAccess
+    arguments:
+      - '@entity_type.manager'
+      - '@request_stack'
+    tags:
+      - { name: access_check, applies_to: _vendor_store_access }
+      - { name: access_check, applies_to: _vendor_store_dashboard_access }

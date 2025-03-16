@@ -1,0 +1,22 @@
+{#
+/**
+ * @file
+ * Default theme implementation for vendor action buttons.
+ *
+ * Available variables:
+ * - buttons: An array of buttons with the following keys:
+ *   - title: The button text.
+ *   - url: The URL object for the button link.
+ *   - icon: The icon name (optional).
+ *   - button_class: Additional CSS classes for the button (optional).
+ *   - weight: Weight determining button order.
+ */
+#}
+<div class="vendor-action-buttons">
+    {% for button in buttons %}
+      <a href="{{ button.url }}" class="action-button {{ button.button_class }}">
+        <span class="icon icon-{{ button.icon }}"></span>
+        {{ button.title }}
+      </a>
+    {% endfor %}
+  </div>

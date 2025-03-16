@@ -30,3 +30,9 @@ vendor_sidebar:
   css:
     theme:
       css/vendor-sidebar.css: {}
+
+vendor_action_buttons:
+  version: 1.x
+  css:
+    theme:
+      css/vendor-action-buttons.css: {}

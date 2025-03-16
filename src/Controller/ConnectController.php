@@ -703,6 +703,7 @@ class ConnectController extends ControllerBase {
       $query = $this->entityTypeManager->getStorage('user')->getQuery();
       $query->condition('field_stripe_account_id', '', '<>');
       $query->condition('status', 1);
+      $query->accessCheck(FALSE);
       $uids = $query->execute();
       
       // Load users

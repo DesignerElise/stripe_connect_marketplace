@@ -83,6 +83,12 @@ function stripe_connect_marketplace_theme($existing, $type, $theme, $path) {
       ],
       'template' => 'stripe-connect-vendor-terms',
     ],
+    'vendor_action_buttons' => [
+      'variables' => [
+        'buttons' => [],
+      ],
+      'template' => 'vendor-action-buttons',
+    ],
   ];
 }
 
@@ -557,4 +563,197 @@ function stripe_connect_marketplace_preprocess_page(&$variables) {
     // Attach vendor sidebar CSS
     $variables['#attached']['library'][] = 'stripe_connect_marketplace/vendor_sidebar';
   }
+}
+
+# These route alterations should be implemented in your hook_menu_alter() in the module file
+
+/**
+ * Implements hook_menu_alter().
+ */
+function stripe_connect_marketplace_menu_alter(&$items) {
+  // Override access callbacks for store-related routes to allow vendor access
+  if (isset($items['entity.commerce_store.collection'])) {
+    $items['entity.commerce_store.collection']['access callback'] = '_stripe_connect_marketplace_vendor_store_collection_access';
+    $items['entity.commerce_store.collection']['access arguments'] = ['view own commerce_store'];
+  }
+  
+  // Override store edit route access
+  if (isset($items['entity.commerce_store.edit_form'])) {
+    $items['entity.commerce_store.edit_form']['access callback'] = '_stripe_connect_marketplace_vendor_store_entity_access';
+    $items['entity.commerce_store.edit_form']['access arguments'] = [1, 'update'];
+  }
+  
+  // Override product-related route access
+  if (isset($items['entity.commerce_product.collection'])) {
+    $items['entity.commerce_product.collection']['access callback'] = '_stripe_connect_marketplace_vendor_product_collection_access';
+    $items['entity.commerce_product.collection']['access arguments'] = ['view own commerce_product'];
+  }
+  
+  // Override product edit route access
+  if (isset($items['entity.commerce_product.edit_form'])) {
+    $items['entity.commerce_product.edit_form']['access callback'] = '_stripe_connect_marketplace_vendor_product_entity_access';
+    $items['entity.commerce_product.edit_form']['access arguments'] = [1, 'update'];
+  }
+  
+  // Override order collection route access
+  if (isset($items['entity.commerce_order.collection'])) {
+    $items['entity.commerce_order.collection']['access callback'] = '_stripe_connect_marketplace_vendor_order_collection_access';
+    $items['entity.commerce_order.collection']['access arguments'] = ['view own commerce_order'];
+  }
+  
+  // Allow vendor access to add store form
+  if (isset($items['entity.commerce_store.add_form'])) {
+    $items['entity.commerce_store.add_form']['access callback'] = '_stripe_connect_marketplace_vendor_add_store_access';
+  }
+  
+  // Allow vendor access to add product form
+  if (isset($items['entity.commerce_product.add_form'])) {
+    $items['entity.commerce_product.add_form']['access callback'] = '_stripe_connect_marketplace_vendor_add_product_access';
+  }
+}
+
+/**
+ * Access callback for vendor store collection.
+ */
+function _stripe_connect_marketplace_vendor_store_collection_access($permission = NULL) {
+  $account = \Drupal::currentUser();
+  
+  // Allow access for admins
+  if ($account->hasPermission('administer commerce_store')) {
+    return TRUE;
+  }
+  
+  // Allow access for vendors with appropriate permission
+  if ($account->hasRole('vendor') && ($permission === NULL || $account->hasPermission($permission))) {
+    return TRUE;
+  }
+  
+  return FALSE;
+}
+
+/**
+ * Access callback for vendor store entity operations.
+ */
+function _stripe_connect_marketplace_vendor_store_entity_access($store, $operation = 'view') {
+  $account = \Drupal::currentUser();
+  
+  // Allow access for admins
+  if ($account->hasPermission('administer commerce_store')) {
+    return TRUE;
+  }
+  
+  // Allow access for vendor if they own the store
+  if ($account->hasRole('vendor') && $account->hasPermission($operation . ' own commerce_store')) {
+    return $store->getOwnerId() == $account->id();
+  }
+  
+  return FALSE;
+}
+
+/**
+ * Access callback for vendor product collection.
+ */
+function _stripe_connect_marketplace_vendor_product_collection_access($permission = NULL) {
+  $account = \Drupal::currentUser();
+  
+  // Allow access for admins
+  if ($account->hasPermission('administer commerce_product')) {
+    return TRUE;
+  }
+  
+  // Allow access for vendors with appropriate permission
+  if ($account->hasRole('vendor') && ($permission === NULL || $account->hasPermission($permission))) {
+    return TRUE;
+  }
+  
+  return FALSE;
+}
+
+/**
+ * Access callback for vendor product entity operations.
+ */
+function _stripe_connect_marketplace_vendor_product_entity_access($product, $operation = 'view') {
+  $account = \Drupal::currentUser();
+  
+  // Allow access for admins
+  if ($account->hasPermission('administer commerce_product')) {
+    return TRUE;
+  }
+  
+  // For vendors, check if the product belongs to any of their stores
+  if ($account->hasRole('vendor') && $account->hasPermission($operation . ' own commerce_product')) {
+    $vendor_access = \Drupal::service('stripe_connect_marketplace.vendor_access');
+    $user_store_ids = $vendor_access->getUserStoreIds($account->id());
+    
+    foreach ($product->getStores() as $store) {
+      if (in_array($store->id(), $user_store_ids)) {
+        return TRUE;
+      }
+    }
+  }
+  
+  return FALSE;
+}
+
+/**
+ * Access callback for vendor order collection.
+ */
+function _stripe_connect_marketplace_vendor_order_collection_access($permission = NULL) {
+  $account = \Drupal::currentUser();
+  
+  // Allow access for admins
+  if ($account->hasPermission('administer commerce_order')) {
+    return TRUE;
+  }
+  
+  // Allow access for vendors with appropriate permission
+  if ($account->hasRole('vendor') && ($permission === NULL || $account->hasPermission($permission))) {
+    return TRUE;
+  }
+  
+  return FALSE;
+}
+
+/**
+ * Access callback for vendor add store form.
+ */
+function _stripe_connect_marketplace_vendor_add_store_access() {
+  $account = \Drupal::currentUser();
+  
+  // Allow access for admins
+  if ($account->hasPermission('administer commerce_store')) {
+    return TRUE;
+  }
+  
+  // Allow access for vendors with create permission
+  if ($account->hasRole('vendor') && $account->hasPermission('create commerce_store')) {
+    return TRUE;
+  }
+  
+  return FALSE;
+}
+
+/**
+ * Access callback for vendor add product form.
+ */
+function _stripe_connect_marketplace_vendor_add_product_access() {
+  $account = \Drupal::currentUser();
+  
+  // Allow access for admins
+  if ($account->hasPermission('administer commerce_product')) {
+    return TRUE;
+  }
+  
+  // Allow access for vendors with create permission
+  if ($account->hasRole('vendor') && $account->hasPermission('create commerce_product')) {
+    // Check if vendor has at least one store
+    $vendor_access = \Drupal::service('stripe_connect_marketplace.vendor_access');
+    $user_store_ids = $vendor_access->getUserStoreIds($account->id());
+    
+    if (count($user_store_ids) > 0) {
+      return TRUE;
+    }
+  }
+  
+  return FALSE;
 }

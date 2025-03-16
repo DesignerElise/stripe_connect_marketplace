@@ -172,6 +172,7 @@ class AdminActionsController extends ControllerBase {
       $query = \Drupal::entityTypeManager()->getStorage('user')->getQuery();
       $query->condition('field_stripe_account_id', '', '<>');
       $query->condition('status', 1);
+      $query->accessCheck(FALSE);
       $context['sandbox']['max'] = $query->count()->execute();
       $context['sandbox']['current_id'] = 0;
       
@@ -188,6 +189,7 @@ class AdminActionsController extends ControllerBase {
     $query = \Drupal::entityTypeManager()->getStorage('user')->getQuery();
     $query->condition('field_stripe_account_id', '', '<>');
     $query->condition('status', 1);
+    $query->accessCheck(FALSE);
     $query->condition('uid', $context['sandbox']['current_id'], '>');
     $query->sort('uid', 'ASC');
     $query->range(0, $batch_size);

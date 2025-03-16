@@ -1,0 +1,97 @@
+/**
+ * Styles for Vendor Action Buttons
+ */
+ .vendor-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 20px 0;
+  }
+  
+  .vendor-action-buttons .action-button {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #6772e5;
+    color: white;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .vendor-action-buttons .action-button:hover,
+  .vendor-action-buttons .action-button:focus {
+    background-color: #5469d4;
+    color: white;
+    text-decoration: none;
+  }
+  
+  .vendor-action-buttons .action-button .icon {
+    margin-right: 8px;
+    font-size: 16px;
+  }
+  
+  /* Button variations */
+  .vendor-action-buttons .add-store-button {
+    background-color: #38a169;
+  }
+  
+  .vendor-action-buttons .add-store-button:hover,
+  .vendor-action-buttons .add-store-button:focus {
+    background-color: #2f855a;
+  }
+  
+  .vendor-action-buttons .add-product-button {
+    background-color: #4299e1;
+  }
+  
+  .vendor-action-buttons .add-product-button:hover,
+  .vendor-action-buttons .add-product-button:focus {
+    background-color: #3182ce;
+  }
+  
+  .vendor-action-buttons .manage-store-button {
+    background-color: #ed8936;
+  }
+  
+  .vendor-action-buttons .manage-store-button:hover,
+  .vendor-action-buttons .manage-store-button:focus {
+    background-color: #dd6b20;
+  }
+  
+  /* Icons */
+  .vendor-action-buttons .icon-store:before {
+    content: "🏪";
+  }
+  
+  .vendor-action-buttons .icon-product:before {
+    content: "📦";
+  }
+  
+  .vendor-action-buttons .icon-settings:before {
+    content: "⚙️";
+  }
+  
+  .vendor-action-buttons .icon-inventory:before {
+    content: "📋";
+  }
+  
+  .vendor-action-buttons .icon-orders:before {
+    content: "🛒";
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 640px) {
+    .vendor-action-buttons {
+      flex-direction: column;
+    }
+    
+    .vendor-action-buttons .action-button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+  
