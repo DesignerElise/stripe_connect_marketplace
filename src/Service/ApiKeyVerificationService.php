@@ -125,7 +125,7 @@ class ApiKeyVerificationService {
     
     // If we're recovering from failure, log it
     if ($current['status'] === 'invalid') {
-      $this->logger->info('Stripe API keys are now valid again after previous failures.');
+      SafeLogging::log($this->logger, 'Stripe API keys are now valid again after previous failures.');
     }
   }
 
@@ -154,7 +154,7 @@ class ApiKeyVerificationService {
     ]);
     
     // Log the issue
-    $this->logger->error('Stripe API key verification failed (@count consecutive failures): @error', [
+    SafeLogging::log($this->logger, 'Stripe API key verification failed (@count consecutive failures): @error', [
       '@count' => $failures,
       '@error' => $error_message,
     ]);
@@ -214,7 +214,7 @@ class ApiKeyVerificationService {
       }
     }
     
-    $this->logger->notice('Sent Stripe API key failure notification to @count administrators', [
+    SafeLogging::log($this->logger, 'Sent Stripe API key failure notification to @count administrators', [
       '@count' => count($users),
     ]);
   }

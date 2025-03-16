@@ -110,7 +110,7 @@ class PayoutService {
       $client = $this->stripeApi->getClient();
       if (!$client) {
         // We're in test mode, return mock data
-        $this->logger->notice('StripeAPI client is in test mode, returning mock payout data');
+        SafeLogging::log($this->logger, 'StripeAPI client is in test mode, returning mock payout data');
         
         // Create a mock payouts object
         $mock_payouts = new \stdClass();
@@ -141,11 +141,11 @@ class PayoutService {
       return $payouts;
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error('Stripe API Error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Stripe API Error: @message', ['@message' => $e->getMessage()]);
       throw new \Exception('Failed to retrieve payouts: ' . $e->getMessage(), $e->getCode(), $e);
     }
     catch (\Exception $e) {
-      $this->logger->error('Payout retrieval error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Payout retrieval error: @message', ['@message' => $e->getMessage()]);
       throw $e;
     }
   }
@@ -178,7 +178,7 @@ class PayoutService {
       // Update directly on the connected account
       $account = $this->stripeApi->update('Account', $account_id, $params, $options);
       
-      $this->logger->info('Payout schedule updated for account @id: @interval', [
+      SafeLogging::log($this->logger, 'Payout schedule updated for account @id: @interval', [
         '@id' => $account_id,
         '@interval' => $interval,
       ]);
@@ -186,11 +186,11 @@ class PayoutService {
       return $account;
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error('Stripe API Error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Stripe API Error: @message', ['@message' => $e->getMessage()]);
       throw new \Exception('Failed to update payout schedule: ' . $e->getMessage(), $e->getCode(), $e);
     }
     catch (\Exception $e) {
-      $this->logger->error('Payout schedule update error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Payout schedule update error: @message', ['@message' => $e->getMessage()]);
       throw $e;
     }
   }
@@ -228,7 +228,7 @@ class PayoutService {
       // Create the payout on the connected account
       $payout = $this->stripeApi->create('Payout', $params, $options);
       
-      $this->logger->info('Manual payout created for account @id: @amount @currency', [
+      SafeLogging::log($this->logger, 'Manual payout created for account @id: @amount @currency', [
         '@id' => $account_id,
         '@amount' => $amount,
         '@currency' => $currency,
@@ -237,11 +237,11 @@ class PayoutService {
       return $payout;
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error('Stripe API Error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Stripe API Error: @message', ['@message' => $e->getMessage()]);
       throw new \Exception('Failed to create payout: ' . $e->getMessage(), $e->getCode(), $e);
     }
     catch (\Exception $e) {
-      $this->logger->error('Payout creation error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Payout creation error: @message', ['@message' => $e->getMessage()]);
       throw $e;
     }
   }
@@ -292,7 +292,7 @@ class PayoutService {
       // Save updated tracking data
       $this->state->set('stripe_connect_marketplace.payouts_tracking', $payouts_tracking);
       
-      $this->logger->info('Payout tracked: @id for vendor @vendor_id (event: @event)', [
+      SafeLogging::log($this->logger, 'Payout tracked: @id for vendor @vendor_id (event: @event)', [
         '@id' => $payout->id,
         '@vendor_id' => $vendor_id,
         '@event' => $event_type,
@@ -301,7 +301,7 @@ class PayoutService {
       return TRUE;
     }
     catch (\Exception $e) {
-      $this->logger->error('Payout tracking error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Payout tracking error: @message', ['@message' => $e->getMessage()]);
       return FALSE;
     }
   }
@@ -413,7 +413,7 @@ class PayoutService {
       return $formatted_fees;
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error('Stripe API Error fetching application fees: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Stripe API Error fetching application fees: @message', ['@message' => $e->getMessage()]);
       return [];
     }
   }
@@ -540,7 +540,7 @@ class PayoutService {
       }
     }
     catch (\Exception $e) {
-      $this->logger->error('Error looking up vendor: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error looking up vendor: @message', ['@message' => $e->getMessage()]);
     }
     
     return NULL;

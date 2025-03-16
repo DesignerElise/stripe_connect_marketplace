@@ -130,7 +130,7 @@ class AccountVerificationService {
             $user->set('field_vendor_status', $new_status);
             $user->save();
 
-            $this->logger->info('Updated vendor @uid status from @old to @new', [
+            SafeLogging::log($this->logger, 'Updated vendor @uid status from @old to @new', [
               '@uid' => $user->id(),
               '@old' => $current_status,
               '@new' => $new_status,
@@ -150,7 +150,7 @@ class AccountVerificationService {
             $user->set('field_vendor_status', 'deleted');
             $user->save();
 
-            $this->logger->warning('Vendor @uid Stripe account @account_id has been deleted. Updated status.', [
+            SafeLogging::log($this->logger, 'Vendor @uid Stripe account @account_id has been deleted. Updated status.', [
               '@uid' => $user->id(),
               '@account_id' => $account_id,
             ]);
@@ -168,7 +168,7 @@ class AccountVerificationService {
         }
         else {
           // This is some other error
-          $this->logger->error('Error verifying account @id for vendor @uid: @message', [
+          SafeLogging::log($this->logger, 'Error verifying account @id for vendor @uid: @message', [
             '@id' => $account_id,
             '@uid' => $user->id(),
             '@message' => $e->getMessage(),
@@ -216,7 +216,7 @@ class AccountVerificationService {
       ];
       $this->state->set('stripe_connect_marketplace.deleted_accounts', $deleted_accounts);
 
-      $this->logger->warning('Marked vendor @uid Stripe account @account_id as deleted.', [
+      SafeLogging::log($this->logger, 'Marked vendor @uid Stripe account @account_id as deleted.', [
         '@uid' => $user->id(),
         '@account_id' => $account_id,
       ]);

@@ -173,7 +173,7 @@ class ConnectController extends ControllerBase {
           return new TrustedRedirectResponse($account_link->url);
         }
         catch (\Exception $e) {
-          $this->logger->error('Error checking Stripe account status: @message', ['@message' => $e->getMessage()]);
+          SafeLogging::log($this->logger, 'Error checking Stripe account status: @message', ['@message' => $e->getMessage()]);
         }
       }
       
@@ -198,13 +198,13 @@ class ConnectController extends ControllerBase {
         $user->set('field_stripe_account_id', $account->id);
         $user->save();
         
-        $this->logger->info('Created Stripe Connect account for user @uid: @account_id', [
+        SafeLogging::log($this->logger, 'Created Stripe Connect account for user @uid: @account_id', [
           '@uid' => $user->id(),
           '@account_id' => $account->id,
         ]);
       }
       else {
-        $this->logger->warning('User entity does not have field_stripe_account_id field');
+        SafeLogging::log($this->logger, 'User entity does not have field_stripe_account_id field');
         $this->messenger()->addError($this->t('Unable to save Stripe account information.'));
         return new RedirectResponse(Url::fromRoute('<front>')->toString());
       }
@@ -225,7 +225,7 @@ class ConnectController extends ControllerBase {
       return new TrustedRedirectResponse($account_link->url);
     }
     catch (\Exception $e) {
-      $this->logger->error('Error creating Stripe Connect account: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error creating Stripe Connect account: @message', ['@message' => $e->getMessage()]);
       $this->messenger()->addError($this->t('An error occurred while setting up your vendor account: @error', [
         '@error' => $e->getMessage(),
       ]));
@@ -305,7 +305,7 @@ class ConnectController extends ControllerBase {
       ];
     }
     catch (\Exception $e) {
-      $this->logger->error('Error completing onboarding: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error completing onboarding: @message', ['@message' => $e->getMessage()]);
       $this->messenger()->addError($this->t('An error occurred while completing your vendor setup. Please try again later.'));
       return new RedirectResponse(Url::fromRoute('<front>')->toString());
     }
@@ -402,7 +402,7 @@ class ConnectController extends ControllerBase {
             $dashboard_url = $dashboard_link->url;
           }
           catch (\Exception $e) {
-            $this->logger->error('Error creating dashboard link: @message', ['@message' => $e->getMessage()]);
+            SafeLogging::log($this->logger, 'Error creating dashboard link: @message', ['@message' => $e->getMessage()]);
             $dashboard_url = null;
           }
         }
@@ -427,7 +427,7 @@ class ConnectController extends ControllerBase {
             $dashboard_url = $onboarding_link->url;
           }
           catch (\Exception $e) {
-            $this->logger->error('Error creating onboarding link: @message', ['@message' => $e->getMessage()]);
+            SafeLogging::log($this->logger, 'Error creating onboarding link: @message', ['@message' => $e->getMessage()]);
             $dashboard_url = null;
           }
         }
@@ -458,7 +458,7 @@ class ConnectController extends ControllerBase {
           $user->set('field_vendor_status', 'deleted');
           $user->save();
           
-          $this->logger->warning('Vendor dashboard: Stripe account @account_id has been deleted. Updated status.', [
+          SafeLogging::log($this->logger, 'Vendor dashboard: Stripe account @account_id has been deleted. Updated status.', [
             '@account_id' => $account_id,
           ]);
         }
@@ -481,7 +481,7 @@ class ConnectController extends ControllerBase {
       }
     }
     catch (\Exception $e) {
-      $this->logger->error('Error displaying vendor dashboard: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error displaying vendor dashboard: @message', ['@message' => $e->getMessage()]);
       return [
         '#markup' => $this->t('An error occurred while loading your vendor dashboard. Please try again later.'),
       ];
@@ -611,7 +611,7 @@ class ConnectController extends ControllerBase {
       ];
     }
     catch (\Exception $e) {
-      $this->logger->error('Error viewing vendor details: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error viewing vendor details: @message', ['@message' => $e->getMessage()]);
       $this->messenger()->addError($this->t('An error occurred while retrieving vendor details.'));
       return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
     }
@@ -673,7 +673,7 @@ class ConnectController extends ControllerBase {
       ];
     }
     catch (\Exception $e) {
-      $this->logger->error('Error viewing vendor payouts: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error viewing vendor payouts: @message', ['@message' => $e->getMessage()]);
       $this->messenger()->addError($this->t('An error occurred while retrieving vendor payouts.'));
       return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
     }
@@ -751,7 +751,7 @@ class ConnectController extends ControllerBase {
             $user->set('field_vendor_status', 'deleted');
             $user->save();
             
-            $this->logger->warning('Admin dashboard: Detected deleted Stripe account @account_id for user @uid', [
+            SafeLogging::log($this->logger, 'Admin dashboard: Detected deleted Stripe account @account_id for user @uid', [
               '@account_id' => $account_id,
               '@uid' => $user->id(),
             ]);
@@ -767,7 +767,7 @@ class ConnectController extends ControllerBase {
           ];
         }
         catch (\Exception $e) {
-          $this->logger->warning('Error retrieving Stripe account @id for user @uid: @message', [
+          SafeLogging::log($this->logger, 'Error retrieving Stripe account @id for user @uid: @message', [
             '@id' => $account_id,
             '@uid' => $user->id(),
             '@message' => $e->getMessage(),
@@ -837,7 +837,7 @@ class ConnectController extends ControllerBase {
       ];
     }
     catch (\Exception $e) {
-      $this->logger->error('Error displaying admin dashboard: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error displaying admin dashboard: @message', ['@message' => $e->getMessage()]);
       return [
         '#markup' => $this->t('An error occurred while loading the admin dashboard. Please try again later.'),
       ];

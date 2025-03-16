@@ -360,7 +360,7 @@ class AdminActionsController extends ControllerBase {
       $account->save();
       
       // Log the action
-      $this->logger->info('User @name (@uid) was made a vendor by admin @admin.', [
+      SafeLogging::log($this->logger, 'User @name (@uid) was made a vendor by admin @admin.', [
         '@name' => $account->getDisplayName(),
         '@uid' => $account->id(),
         '@admin' => $this->currentUser()->getDisplayName(),
@@ -378,7 +378,7 @@ class AdminActionsController extends ControllerBase {
       }
     }
     catch (\Exception $e) {
-      $this->logger->error('Error making user a vendor: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error making user a vendor: @message', ['@message' => $e->getMessage()]);
       $this->messenger()->addError($this->t('An error occurred: @error', ['@error' => $e->getMessage()]));
     }
     

@@ -55,7 +55,7 @@ class StripeApiService {
     
     // Check if Stripe library exists
     if (!class_exists('\Stripe\Stripe')) {
-      $this->logger->error('Stripe PHP library not found. Enable test mode or install with: composer require stripe/stripe-php');
+      SafeLogging::log($this->logger, 'Stripe PHP library not found. Enable test mode or install with: composer require stripe/stripe-php');
       $this->testMode = TRUE;
     } else {
       // Try to initialize the API client
@@ -79,17 +79,17 @@ class StripeApiService {
     $secret_key = isset($stripe_connect[$environment . '_secret_key']) ? $stripe_connect[$environment . '_secret_key'] : '';
 
     if (empty($secret_key)) {
-      $this->logger->warning('Stripe API key is not configured. Using test mode.');
+      SafeLogging::log($this->logger, 'Stripe API key is not configured. Using test mode.');
       return;
     }
 
     try {
       \Stripe\Stripe::setApiKey($secret_key);
       $this->client = new \Stripe\StripeClient($secret_key);
-      $this->logger->info('Stripe client initialized successfully.');
+      SafeLogging::log($this->logger, 'Stripe client initialized successfully.');
     }
     catch (\Exception $e) {
-      $this->logger->error('Error initializing Stripe client: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error initializing Stripe client: @message', ['@message' => $e->getMessage()]);
       $this->client = NULL;
     }
   }
@@ -181,7 +181,7 @@ class StripeApiService {
       }
     }
     catch (\Exception $e) {
-      $this->logger->error('Error creating @resource: @message', [
+      SafeLogging::log($this->logger, 'Error creating @resource: @message', [
         '@resource' => $resource,
         '@message' => $e->getMessage(),
       ]);
@@ -252,7 +252,7 @@ class StripeApiService {
       }
     }
     catch (\Exception $e) {
-      $this->logger->error('Error retrieving @resource @id: @message', [
+      SafeLogging::log($this->logger, 'Error retrieving @resource @id: @message', [
         '@resource' => $resource,
         '@id' => $id,
         '@message' => $e->getMessage(),
@@ -315,7 +315,7 @@ class StripeApiService {
       }
     }
     catch (\Exception $e) {
-      $this->logger->error('Error updating @resource @id: @message', [
+      SafeLogging::log($this->logger, 'Error updating @resource @id: @message', [
         '@resource' => $resource,
         '@id' => $id,
         '@message' => $e->getMessage(),
@@ -411,7 +411,7 @@ class StripeApiService {
         $mock->created = time();
     }
     
-    $this->logger->info('Created mock @resource: @id', [
+    SafeLogging::log($this->logger, 'Created mock @resource: @id', [
       '@resource' => $resource,
       '@id' => $mock->id,
     ]);
@@ -461,7 +461,7 @@ class StripeApiService {
         break;
     }
     
-    $this->logger->info('Retrieved mock @resource: @id', [
+    SafeLogging::log($this->logger, 'Retrieved mock @resource: @id', [
       '@resource' => $resource,
       '@id' => $id,
     ]);
@@ -499,7 +499,7 @@ class StripeApiService {
     
     $mock->updated = time();
     
-    $this->logger->info('Updated mock @resource: @id', [
+    SafeLogging::log($this->logger, 'Updated mock @resource: @id', [
       '@resource' => $resource,
       '@id' => $id,
     ]);
@@ -525,7 +525,7 @@ class StripeApiService {
     $event->data = new \stdClass();
     $event->data->object = new \stdClass();
     
-    $this->logger->info('Created mock event: @id', ['@id' => $event->id]);
+    SafeLogging::log($this->logger, 'Created mock event: @id', ['@id' => $event->id]);
     
     return $event;
   }

@@ -12,6 +12,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\commerce_order\Entity\Order;
 use Drupal\stripe_connect_marketplace\Service\PayoutService;
 use Drupal\stripe_connect_marketplace\StripeApiService;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Controller for handling Stripe webhooks.
@@ -110,7 +111,7 @@ class WebhookController extends ControllerBase {
       $sig_header = $request->headers->get('Stripe-Signature');
       
       if (empty($payload) || empty($sig_header)) {
-        $this->logger->warning('Missing webhook payload or signature header');
+        SafeLogging::log($this->logger, 'Missing webhook payload or signature header');
         return new Response('Bad request', 400);
       }
       
@@ -119,7 +120,7 @@ class WebhookController extends ControllerBase {
       $webhook_secret = $config->get('stripe_connect.webhook_secret');
       
       if (empty($webhook_secret)) {
-        $this->logger->error('Webhook secret not configured');
+        SafeLogging::log($this->logger, 'Webhook secret not configured');
         return new Response('Server error', 500);
       }
       
@@ -130,16 +131,16 @@ class WebhookController extends ControllerBase {
         );
       }
       catch (\UnexpectedValueException $e) {
-        $this->logger->warning('Invalid webhook payload: @message', ['@message' => $e->getMessage()]);
+        SafeLogging::log($this->logger, 'Invalid webhook payload: @message', ['@message' => $e->getMessage()]);
         return new Response('Bad request', 400);
       }
       catch (\Stripe\Exception\SignatureVerificationException $e) {
-        $this->logger->warning('Invalid webhook signature: @message', ['@message' => $e->getMessage()]);
+        SafeLogging::log($this->logger, 'Invalid webhook signature: @message', ['@message' => $e->getMessage()]);
         return new Response('Bad request', 400);
       }
       
       // Log the event type
-      $this->logger->info('Processing Stripe webhook: @type', ['@type' => $event->type]);
+      SafeLogging::log($this->logger, 'Processing Stripe webhook: @type', ['@type' => $event->type]);
       
       // Determine the account ID if this is a Connect event
       $account_id = null;
@@ -168,12 +169,12 @@ class WebhookController extends ControllerBase {
           
         default:
           // Log but don't take action for other event types
-          $this->logger->info('Unhandled webhook event: @type', ['@type' => $event->type]);
+          SafeLogging::log($this->logger, 'Unhandled webhook event: @type', ['@type' => $event->type]);
           return new Response('Event received', 200);
       }
     }
     catch (\Exception $e) {
-      $this->logger->error('Webhook processing error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Webhook processing error: @message', ['@message' => $e->getMessage()]);
       return new Response('Server error', 500);
     }
   }
@@ -193,7 +194,7 @@ class WebhookController extends ControllerBase {
     try {
       // Check if this payment is related to an order
       if (!isset($payment_intent->metadata->order_id)) {
-        $this->logger->info('No order ID in payment intent metadata');
+        SafeLogging::log($this->logger, 'No order ID in payment intent metadata');
         return new Response('No action taken', 200);
       }
       
@@ -202,13 +203,13 @@ class WebhookController extends ControllerBase {
       // Load the order
       $order = Order::load($order_id);
       if (!$order) {
-        $this->logger->warning('Order not found: @order_id', ['@order_id' => $order_id]);
+        SafeLogging::log($this->logger, 'Order not found: @order_id', ['@order_id' => $order_id]);
         return new Response('Order not found', 200);
       }
       
       // Check if the order is already completed
       if ($order->getState()->getId() === 'completed') {
-        $this->logger->info('Order already completed: @order_id', ['@order_id' => $order_id]);
+        SafeLogging::log($this->logger, 'Order already completed: @order_id', ['@order_id' => $order_id]);
         return new Response('Order already processed', 200);
       }
       
@@ -218,16 +219,16 @@ class WebhookController extends ControllerBase {
         $order->getState()->applyTransition($transition);
         $order->save();
         
-        $this->logger->info('Order completed via webhook: @order_id', ['@order_id' => $order_id]);
+        SafeLogging::log($this->logger, 'Order completed via webhook: @order_id', ['@order_id' => $order_id]);
       }
       else {
-        $this->logger->warning('Cannot transition order @order_id to completed state', ['@order_id' => $order_id]);
+        SafeLogging::log($this->logger, 'Cannot transition order @order_id to completed state', ['@order_id' => $order_id]);
       }
       
       return new Response('Order processed', 200);
     }
     catch (\Exception $e) {
-      $this->logger->error('Error processing payment_intent.succeeded: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error processing payment_intent.succeeded: @message', ['@message' => $e->getMessage()]);
       return new Response('Processing error', 500);
     }
   }
@@ -247,7 +248,7 @@ class WebhookController extends ControllerBase {
     try {
       // Check if this payment is related to an order
       if (!isset($payment_intent->metadata->order_id)) {
-        $this->logger->info('No order ID in payment intent metadata');
+        SafeLogging::log($this->logger, 'No order ID in payment intent metadata');
         return new Response('No action taken', 200);
       }
       
@@ -256,12 +257,12 @@ class WebhookController extends ControllerBase {
       // Load the order
       $order = Order::load($order_id);
       if (!$order) {
-        $this->logger->warning('Order not found: @order_id', ['@order_id' => $order_id]);
+        SafeLogging::log($this->logger, 'Order not found: @order_id', ['@order_id' => $order_id]);
         return new Response('Order not found', 200);
       }
       
       // Log payment failure
-      $this->logger->warning('Payment failed for order @order_id: @error', [
+      SafeLogging::log($this->logger, 'Payment failed for order @order_id: @error', [
         '@order_id' => $order_id,
         '@error' => $payment_intent->last_payment_error ? $payment_intent->last_payment_error->message : 'Unknown error',
       ]);
@@ -269,7 +270,7 @@ class WebhookController extends ControllerBase {
       return new Response('Payment failure recorded', 200);
     }
     catch (\Exception $e) {
-      $this->logger->error('Error processing payment_intent.payment_failed: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error processing payment_intent.payment_failed: @message', ['@message' => $e->getMessage()]);
       return new Response('Processing error', 500);
     }
   }
@@ -289,7 +290,7 @@ class WebhookController extends ControllerBase {
     try {
       // Check if this charge is related to an order
       if (!isset($charge->metadata->order_id)) {
-        $this->logger->info('No order ID in charge metadata');
+        SafeLogging::log($this->logger, 'No order ID in charge metadata');
         return new Response('No action taken', 200);
       }
       
@@ -298,12 +299,12 @@ class WebhookController extends ControllerBase {
       // Load the order
       $order = Order::load($order_id);
       if (!$order) {
-        $this->logger->warning('Order not found: @order_id', ['@order_id' => $order_id]);
+        SafeLogging::log($this->logger, 'Order not found: @order_id', ['@order_id' => $order_id]);
         return new Response('Order not found', 200);
       }
       
       // Log refund
-      $this->logger->info('Charge refunded for order @order_id: @amount', [
+      SafeLogging::log($this->logger, 'Charge refunded for order @order_id: @amount', [
         '@order_id' => $order_id,
         '@amount' => $charge->amount_refunded / 100,
       ]);
@@ -311,7 +312,7 @@ class WebhookController extends ControllerBase {
       return new Response('Refund recorded', 200);
     }
     catch (\Exception $e) {
-      $this->logger->error('Error processing charge.refunded: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error processing charge.refunded: @message', ['@message' => $e->getMessage()]);
       return new Response('Processing error', 500);
     }
   }
@@ -335,14 +336,14 @@ class WebhookController extends ControllerBase {
       $connection_id = $payout->destination ?: $account_id;
       
       if (empty($connection_id)) {
-        $this->logger->info('No account ID identified for payout event');
+        SafeLogging::log($this->logger, 'No account ID identified for payout event');
         return new Response('No action taken', 200);
       }
       
       // Find the vendor user
       $vendor_id = $this->getVendorIdFromStripeAccount($connection_id);
       if (!$vendor_id) {
-        $this->logger->warning('Vendor not found for Stripe account: @account_id', ['@account_id' => $connection_id]);
+        SafeLogging::log($this->logger, 'Vendor not found for Stripe account: @account_id', ['@account_id' => $connection_id]);
         return new Response('Vendor not found', 200);
       }
       
@@ -350,7 +351,7 @@ class WebhookController extends ControllerBase {
       $this->payoutService->trackPayout($payout, $connection_id, $vendor_id, $event_type);
       
       // Log the event with detailed information
-      $this->logger->info('@event for vendor @vendor_id: @amount @currency (status: @status)', [
+      SafeLogging::log($this->logger, '@event for vendor @vendor_id: @amount @currency (status: @status)', [
         '@event' => $event_type,
         '@vendor_id' => $vendor_id,
         '@amount' => $payout->amount / 100,
@@ -379,7 +380,7 @@ class WebhookController extends ControllerBase {
       return new Response('Payout event processed', 200);
     }
     catch (\Exception $e) {
-      $this->logger->error('Error processing payout event: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error processing payout event: @message', ['@message' => $e->getMessage()]);
       return new Response('Processing error', 500);
     }
   }
@@ -460,7 +461,7 @@ class WebhookController extends ControllerBase {
     $this->messenger()->addMessage($message, 'vendor_' . $vendor_id);
     
     // Create an alert for the platform admin
-    $this->logger->error('Payout failed for vendor @vendor_id (@name): @amount @currency', [
+    SafeLogging::log($this->logger, 'Payout failed for vendor @vendor_id (@name): @amount @currency', [
       '@vendor_id' => $vendor_id,
       '@name' => $vendor->getDisplayName(),
       '@amount' => number_format($payout->amount / 100, 2),
@@ -484,7 +485,7 @@ class WebhookController extends ControllerBase {
       // Find the vendor user
       $vendor_id = $this->getVendorIdFromStripeAccount($account->id);
       if (!$vendor_id) {
-        $this->logger->warning('Vendor not found for Stripe account: @account_id', ['@account_id' => $account->id]);
+        SafeLogging::log($this->logger, 'Vendor not found for Stripe account: @account_id', ['@account_id' => $account->id]);
         return new Response('Vendor not found', 200);
       }
       
@@ -509,7 +510,7 @@ class WebhookController extends ControllerBase {
           $vendor->set('field_vendor_status', $new_status);
           $vendor->save();
           
-          $this->logger->info('Vendor @vendor_id status updated from @old to @new', [
+          SafeLogging::log($this->logger, 'Vendor @vendor_id status updated from @old to @new', [
             '@vendor_id' => $vendor_id,
             '@old' => $current_status,
             '@new' => $new_status,
@@ -520,7 +521,7 @@ class WebhookController extends ControllerBase {
       return new Response('Account update processed', 200);
     }
     catch (\Exception $e) {
-      $this->logger->error('Error processing account.updated: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error processing account.updated: @message', ['@message' => $e->getMessage()]);
       return new Response('Processing error', 500);
     }
   }
@@ -547,7 +548,7 @@ class WebhookController extends ControllerBase {
       }
     }
     catch (\Exception $e) {
-      $this->logger->error('Error looking up vendor: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Error looking up vendor: @message', ['@message' => $e->getMessage()]);
     }
     
     return NULL;

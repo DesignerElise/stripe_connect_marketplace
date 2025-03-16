@@ -93,7 +93,7 @@ class PaymentService {
       
       $account = $this->stripeApi->create('Account', $account_data);
       
-      $this->logger->info('Stripe Connect account created: @id for @email', [
+      SafeLogging::log($this->logger, 'Stripe Connect account created: @id for @email', [
         '@id' => $account->id,
         '@email' => $email,
       ]);
@@ -101,11 +101,11 @@ class PaymentService {
       return $account;
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error('Stripe API Error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Stripe API Error: @message', ['@message' => $e->getMessage()]);
       throw new \Exception('Failed to create Stripe Connect account: ' . $e->getMessage(), $e->getCode(), $e);
     }
     catch (\Exception $e) {
-      $this->logger->error('Account creation error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Account creation error: @message', ['@message' => $e->getMessage()]);
       throw $e;
     }
   }
@@ -137,11 +137,11 @@ class PaymentService {
       return $account_link;
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error('Stripe API Error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Stripe API Error: @message', ['@message' => $e->getMessage()]);
       throw new \Exception('Failed to create account link: ' . $e->getMessage(), $e->getCode(), $e);
     }
     catch (\Exception $e) {
-      $this->logger->error('Account link error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Account link error: @message', ['@message' => $e->getMessage()]);
       throw $e;
     }
   }
@@ -193,7 +193,7 @@ class PaymentService {
         ],
       ], ['stripe_account' => $vendor_account_id]);
       
-      $this->logger->info('Direct payment created: @id for order @order_id on account @account_id', [
+      SafeLogging::log($this->logger, 'Direct payment created: @id for order @order_id on account @account_id', [
         '@id' => $payment_intent->id,
         '@order_id' => $order_id,
         '@account_id' => $vendor_account_id,
@@ -202,11 +202,11 @@ class PaymentService {
       return $payment_intent;
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error('Stripe API Error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Stripe API Error: @message', ['@message' => $e->getMessage()]);
       throw new \Exception('Stripe payment error: ' . $e->getMessage(), $e->getCode(), $e);
     }
     catch (\Exception $e) {
-      $this->logger->error('Payment error: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger, 'Payment error: @message', ['@message' => $e->getMessage()]);
       throw $e;
     }
   }
