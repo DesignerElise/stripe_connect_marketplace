@@ -1,3 +1,40 @@
+stripe_connect_marketplace.admin_dashboard:
+  path: '/admin/commerce/stripe-connect/dashboard'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::adminDashboard'
+    _title: 'Stripe Connect Dashboard'
+  requirements:
+    _permission: 'access stripe connect admin'
+  options:
+    _admin_route: TRUE
+
+stripe_connect_marketplace.make_vendor:
+  path: '/admin/commerce/stripe-connect/make-vendor/{user}'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\AdminActionsController::makeVendor'
+    _title: 'Make User a Vendor'
+  requirements:
+    _permission: 'administer stripe connect'
+    user: \d+
+  options:
+    _admin_route: TRUE
+
+stripe_connect_marketplace.onboard_vendor:
+  path: '/vendor/onboard'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::onboardVendor'
+    _title: 'Become a Vendor'
+  requirements:
+    _permission: 'access content'
+
+stripe_connect_marketplace.onboard_complete:
+  path: '/vendor/onboard/complete'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::onboardingComplete'
+    _title: 'Onboarding Complete'
+  requirements:
+    _permission: 'access content'
+    
 stripe_connect_marketplace.settings:
   path: '/admin/commerce/config/stripe-connect'
   defaults:
@@ -7,6 +44,30 @@ stripe_connect_marketplace.settings:
     _permission: 'administer stripe connect'
   options:
     _admin_route: TRUE
+    
+stripe_connect_marketplace.vendor_dashboard:
+  path: '/vendor/dashboard'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::vendorDashboard'
+    _title: 'Vendor Dashboard'
+  requirements:
+    _permission: 'view stripe connect dashboard'
+
+stripe_connect_marketplace.vendor_form:
+  path: '/vendor/register'
+  defaults:
+    _form: '\Drupal\stripe_connect_marketplace\Form\OnboardVendorForm'
+    _title: 'Register as Vendor'
+  requirements:
+    _permission: 'register as stripe connect vendor'
+
+stripe_connect_marketplace.vendor_terms:
+  path: '/vendor/terms'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::vendorTerms'
+    _title: 'Vendor Terms and Conditions'
+  requirements:
+    _permission: 'access content'
 
 stripe_connect_marketplace.verify_api_keys:
   path: '/admin/commerce/stripe-connect/verify-api-keys'
@@ -27,66 +88,6 @@ stripe_connect_marketplace.verify_all_accounts:
     _permission: 'administer stripe connect'
   options:
     _admin_route: TRUE
-    
-stripe_connect_marketplace.webhook:
-  path: '/stripe/webhook'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\WebhookController::processWebhook'
-    _title: 'Stripe Webhook Processor'
-  requirements:
-    _access: 'TRUE'
-  options:
-    no_cache: TRUE
-
-stripe_connect_marketplace.onboard_vendor:
-  path: '/vendor/onboard'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::onboardVendor'
-    _title: 'Become a Vendor'
-  requirements:
-    _permission: 'access content'
-
-stripe_connect_marketplace.onboard_complete:
-  path: '/vendor/onboard/complete'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::onboardingComplete'
-    _title: 'Onboarding Complete'
-  requirements:
-    _permission: 'access content'
-
-stripe_connect_marketplace.vendor_dashboard:
-  path: '/vendor/dashboard'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::vendorDashboard'
-    _title: 'Vendor Dashboard'
-  requirements:
-    _permission: 'view stripe connect dashboard'
-
-stripe_connect_marketplace.admin_dashboard:
-  path: '/admin/commerce/stripe-connect/dashboard'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::adminDashboard'
-    _title: 'Stripe Connect Dashboard'
-  requirements:
-    _permission: 'access stripe connect admin'
-  options:
-    _admin_route: TRUE
-
-stripe_connect_marketplace.vendor_form:
-  path: '/vendor/register'
-  defaults:
-    _form: '\Drupal\stripe_connect_marketplace\Form\OnboardVendorForm'
-    _title: 'Register as Vendor'
-  requirements:
-    _permission: 'register as stripe connect vendor'
-
-stripe_connect_marketplace.vendor_terms:
-  path: '/vendor/terms'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::vendorTerms'
-    _title: 'Vendor Terms and Conditions'
-  requirements:
-    _permission: 'access content'
 
 stripe_connect_marketplace.view_vendor:
   path: '/admin/commerce/stripe-connect/vendor/{user}'
@@ -109,3 +110,13 @@ stripe_connect_marketplace.view_vendor_payouts:
     user: \d+
   options:
     _admin_route: TRUE
+
+stripe_connect_marketplace.webhook:
+  path: '/stripe/webhook'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\WebhookController::processWebhook'
+    _title: 'Stripe Webhook Processor'
+  requirements:
+    _access: 'TRUE'
+  options:
+    no_cache: TRUE

@@ -56,3 +56,9 @@ services:
       - '@entity_type.manager'
       - '@state'
       - '@stripe_connect_marketplace.api'
+
+  stripe_connect_marketplace.vendor_access:
+    class: Drupal\stripe_connect_marketplace\VendorAccessService
+    arguments:
+      - '@entity_type.manager'
+      - '@current_user'

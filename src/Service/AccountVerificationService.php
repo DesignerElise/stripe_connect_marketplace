@@ -84,6 +84,7 @@ class AccountVerificationService {
     }
     $query->sort('uid', 'ASC');
     $query->range(0, $limit);
+    $query->accessCheck(FALSE);
     $uids = $query->execute();
 
     if (empty($uids)) {

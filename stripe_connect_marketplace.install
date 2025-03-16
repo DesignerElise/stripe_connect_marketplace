@@ -276,6 +276,77 @@ function stripe_connect_marketplace_update_8002() {
   }
 }
 
+
+/**
+ * Creates the vendor role with required permissions.
+ */
+function _stripe_connect_marketplace_create_vendor_role() {
+  // Check if the role already exists
+  $roles = \Drupal::entityTypeManager()->getStorage('user_role')->loadMultiple();
+  if (!isset($roles['vendor'])) {
+    $role = \Drupal::entityTypeManager()->getStorage('user_role')->create([
+      'id' => 'vendor',
+      'label' => 'Vendor',
+      'weight' => 3,
+    ]);
+    $role->save();
+    
+    // Store permissions
+    $store_permissions = [
+      'view own commerce_store',
+      'create commerce_store',
+      'update own commerce_store',
+      'delete own commerce_store',
+    ];
+    
+    // Product permissions
+    $product_permissions = [
+      'view own commerce_product',
+      'create commerce_product',
+      'update own commerce_product',
+      'delete own commerce_product',
+    ];
+    
+    // Add product type specific permissions
+    $product_types = \Drupal::entityTypeManager()
+      ->getStorage('commerce_product_type')
+      ->loadMultiple();
+    
+    foreach ($product_types as $product_type) {
+      $product_permissions[] = 'create ' . $product_type->id() . ' commerce_product';
+    }
+    
+    // Order permissions
+    $order_permissions = [
+      'view own commerce_order',
+      'update own commerce_order',
+    ];
+    
+    // Taxonomy and other permissions
+    $other_permissions = [
+      'access content',
+      'view commerce_product',
+      'access checkout',
+      'view commerce_product variation',
+      'view stripe connect dashboard',
+      'register as stripe connect vendor',
+    ];
+    
+    // All permissions combined
+    $vendor_permissions = array_merge(
+      $store_permissions,
+      $product_permissions,
+      $order_permissions,
+      $other_permissions
+    );
+    
+    // Grant permissions
+    user_role_grant_permissions($role->id(), $vendor_permissions);
+    
+    \Drupal::logger('stripe_connect_marketplace')->notice('Created vendor role with permissions.');
+  }
+}
+
 /**
  * Adds the vendor role.
  */
@@ -420,4 +491,12 @@ function stripe_connect_marketplace_schema() {
  */
 function stripe_connect_marketplace_update_8001() {
   return t('Schema registration verified for Stripe Connect Marketplace.');
+}
+
+/**
+ * Create vendor role and add permissions for Marketplace.
+ */
+function stripe_connect_marketplace_update_9003() {
+  _stripe_connect_marketplace_create_vendor_role();
+  return t('Created vendor role with Commerce permissions.');
 }

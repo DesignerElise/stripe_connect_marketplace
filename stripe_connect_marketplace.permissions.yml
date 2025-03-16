@@ -19,3 +19,53 @@ register as stripe connect vendor:
 view stripe connect reports:
   title: 'View Stripe Connect reports'
   description: 'Allow users to view Stripe Connect reports and analytics.'
+
+view own commerce_store:
+  title: 'View own stores'
+  description: 'View stores owned by the user.'
+  restrict access: true
+
+create commerce_store:
+  title: 'Create stores'
+  description: 'Create new stores.'
+  restrict access: true
+
+update own commerce_store:
+  title: 'Update own stores'
+  description: 'Update stores owned by the user.'
+  restrict access: true
+
+delete own commerce_store:
+  title: 'Delete own stores'
+  description: 'Delete stores owned by the user.'
+  restrict access: true
+
+view own commerce_product:
+  title: 'View own products'
+  description: 'View products in stores owned by the user.'
+  restrict access: true
+
+create commerce_product:
+  title: 'Create products'
+  description: 'Create new products.'
+  restrict access: true
+
+update own commerce_product:
+  title: 'Update own products'
+  description: 'Update products in stores owned by the user.'
+  restrict access: true
+
+delete own commerce_product:
+  title: 'Delete own products'
+  description: 'Delete products in stores owned by the user.'
+  restrict access: true
+
+view own commerce_order:
+  title: 'View own orders'
+  description: 'View orders placed with stores owned by the user.'
+  restrict access: true
+
+update own commerce_order:
+  title: 'Update own orders'
+  description: 'Update orders placed with stores owned by the user.'
+  restrict access: true

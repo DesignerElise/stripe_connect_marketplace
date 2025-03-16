@@ -8,6 +8,9 @@
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\Access\AccessResult;
 
 /**
  * Implements hook_help().
@@ -88,19 +91,122 @@ function stripe_connect_marketplace_theme($existing, $type, $theme, $path) {
 function stripe_connect_marketplace_entity_operation(EntityInterface $entity) {
   $operations = [];
   
-  // Add operations for user entities that are vendors
-  if ($entity->getEntityTypeId() === 'user' && 
-      $entity->hasField('field_stripe_account_id') && 
-      !$entity->get('field_stripe_account_id')->isEmpty()) {
+  // Add operations for user entities
+  if ($entity->getEntityTypeId() === 'user') {
+    $account = \Drupal::currentUser();
     
-    $operations['stripe_connect'] = [
-      'title' => t('Stripe Connect'),
-      'weight' => 50,
-      'url' => Url::fromRoute('stripe_connect_marketplace.view_vendor', ['user' => $entity->id()]),
-    ];
+    // Add "Make vendor" link for users without vendor role
+    if ($account->hasPermission('administer stripe connect') && 
+        !$entity->hasRole('vendor') && 
+        $entity->id() != 1) { // Skip anonymous user
+      
+      $operations['make_vendor'] = [
+        'title' => t('Make vendor'),
+        'weight' => 50,
+        'url' => Url::fromRoute('stripe_connect_marketplace.make_vendor', ['user' => $entity->id()]),
+      ];
+    }
+    
+    // Add operations for user entities that are vendors with Stripe accounts
+    if ($entity->hasField('field_stripe_account_id') && 
+        !$entity->get('field_stripe_account_id')->isEmpty()) {
+      
+      $operations['stripe_connect'] = [
+        'title' => t('Stripe Connect'),
+        'weight' => 51,
+        'url' => Url::fromRoute('stripe_connect_marketplace.view_vendor', ['user' => $entity->id()]),
+      ];
+    }
   }
   
   return $operations;
+}
+
+/**
+ * Implements hook_entity_access().
+ */
+function stripe_connect_marketplace_entity_access(EntityInterface $entity, $operation, AccountInterface $account) {
+  // Only apply vendor restrictions to appropriate entity types
+  if ($account->hasRole('vendor')) {
+    $vendor_access = \Drupal::service('stripe_connect_marketplace.vendor_access');
+
+    if ($entity->getEntityTypeId() === 'commerce_store') {
+      return $vendor_access->storeAccess($entity, $operation, $account);
+    }
+    elseif ($entity->getEntityTypeId() === 'commerce_product') {
+      return $vendor_access->productAccess($entity, $operation, $account);
+    }
+    elseif ($entity->getEntityTypeId() === 'commerce_order') {
+      return $vendor_access->orderAccess($entity, $operation, $account);
+    }
+  }
+  
+  return AccessResult::neutral();
+}
+
+/**
+ * Implements hook_commerce_store_presave().
+ */
+function stripe_connect_marketplace_commerce_store_presave(EntityInterface $entity) {
+  // For new stores created by vendors, set current user as owner if not already set
+  if ($entity->isNew() && empty($entity->getOwnerId())) {
+    $current_user = \Drupal::currentUser();
+    if ($current_user->hasRole('vendor')) {
+      $entity->setOwnerId($current_user->id());
+      
+      \Drupal::logger('stripe_connect_marketplace')->notice('Automatically set vendor @uid as owner of new store @sid', [
+        '@uid' => $current_user->id(),
+        '@sid' => $entity->id() ?? 'new',
+      ]);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function stripe_connect_marketplace_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  $current_user = \Drupal::currentUser();
+  
+  // Modify store form for vendors
+  if ($form_id === 'commerce_store_form' && $current_user->hasRole('vendor')) {
+    // Hide the owner field - vendors can only create stores they own
+    if (isset($form['uid'])) {
+      $form['uid']['#access'] = FALSE;
+      
+      // Set the current user as the owner
+      $form['uid']['widget'][0]['target_id']['#default_value'] = $current_user;
+    }
+  }
+  
+  // Modify product form for vendors
+  if (str_starts_with($form_id, 'commerce_product_') && str_ends_with($form_id, '_form') && $current_user->hasRole('vendor')) {
+    // Limit store selection to vendor's own stores
+    if (isset($form['stores']['widget'])) {
+      $vendor_access = \Drupal::service('stripe_connect_marketplace.vendor_access');
+      $user_store_ids = $vendor_access->getUserStoreIds($current_user->id());
+      
+      // If user has stores, limit the options
+      if (!empty($user_store_ids)) {
+        $store_options = $form['stores']['widget']['#options'];
+        
+        // Filter options to only include user's stores
+        foreach ($store_options as $key => $option) {
+          if ($key === '_none') {
+            continue;
+          }
+          
+          // Extract store ID from option key (format: "entity:commerce_store/1")
+          $parts = explode('/', $key);
+          $store_id = end($parts);
+          
+          if (!in_array($store_id, $user_store_ids)) {
+            unset($form['stores']['widget']['#options'][$key]);
+          }
+        }
+      }
+    }
+  }
 }
 
 /**

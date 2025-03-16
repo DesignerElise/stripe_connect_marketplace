@@ -322,4 +322,68 @@ class AdminActionsController extends ControllerBase {
     }
   }
 
+/**
+   * Converts a regular user to a vendor.
+   *
+   * @param int $user
+   *   The user ID to convert.
+   *
+   * @return \Symfony\Component\HttpFoundation\RedirectResponse
+   *   A redirect response.
+   */
+  public function makeVendor($user) {
+    // Check permission
+    if (!$this->currentUser()->hasPermission('administer stripe connect')) {
+      $this->messenger()->addError($this->t('You do not have permission to perform this action.'));
+      return new RedirectResponse(Url::fromRoute('<front>')->toString());
+    }
+
+    try {
+      // Load the user
+      $account = $this->entityTypeManager->getStorage('user')->load($user);
+      
+      if (!$account) {
+        $this->messenger()->addError($this->t('User not found.'));
+        return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
+      }
+      
+      // Check if user already has the vendor role
+      if ($account->hasRole('vendor')) {
+        $this->messenger()->addWarning($this->t('User @name is already a vendor.', [
+          '@name' => $account->getDisplayName(),
+        ]));
+        return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
+      }
+      
+      // Add the vendor role
+      $account->addRole('vendor');
+      $account->save();
+      
+      // Log the action
+      $this->logger->info('User @name (@uid) was made a vendor by admin @admin.', [
+        '@name' => $account->getDisplayName(),
+        '@uid' => $account->id(),
+        '@admin' => $this->currentUser()->getDisplayName(),
+      ]);
+      
+      // Show success message
+      $this->messenger()->addStatus($this->t('User @name is now a vendor.', [
+        '@name' => $account->getDisplayName(),
+      ]));
+      
+      // Redirect to onboarding if needed
+      if (!$account->hasField('field_stripe_account_id') || $account->get('field_stripe_account_id')->isEmpty()) {
+        $this->messenger()->addStatus($this->t('The vendor needs to connect a Stripe account.'));
+        return new RedirectResponse(Url::fromRoute('entity.user.edit_form', ['user' => $account->id()])->toString());
+      }
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error making user a vendor: @message', ['@message' => $e->getMessage()]);
+      $this->messenger()->addError($this->t('An error occurred: @error', ['@error' => $e->getMessage()]));
+    }
+    
+    // Return to admin dashboard
+    return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.admin_dashboard')->toString());
+  }
+
 }
