@@ -13,6 +13,7 @@ use Drupal\stripe_connect_marketplace\StripeApiService;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\commerce_price\Price;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Provides the Stripe Connect payment gateway.
@@ -235,7 +236,7 @@ class StripeConnect extends Stripe {
         $owner->set('field_vendor_status', 'deleted');
         $owner->save();
         
-        $this->logger->warning('Vendor Stripe account @account_id has been deleted. Updated status for vendor @uid.', [
+        SafeLogging::log($this->logger,'Vendor Stripe account @account_id has been deleted. Updated status for vendor @uid.', [
           '@account_id' => $vendor_account_id,
           '@uid' => $owner->id(),
         ]);
@@ -262,7 +263,7 @@ class StripeConnect extends Stripe {
         'vendor_account_id' => $vendor_account_id,
       ];
       
-      $this->logger->error('Stripe API Error during payment creation: @message. Order: @order, Payment: @payment, Vendor: @vendor', [
+      SafeLogging::log($this->logger,'Stripe API Error during payment creation: @message. Order: @order, Payment: @payment, Vendor: @vendor', [
         '@message' => $e->getMessage(),
         '@order' => $order->id(),
         '@payment' => $payment->id(),
@@ -425,7 +426,7 @@ class StripeConnect extends Stripe {
       }
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error($e->getMessage());
+      SafeLogging::log($this->logger,$e->getMessage());
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
     }
   }
@@ -456,7 +457,7 @@ class StripeConnect extends Stripe {
       $payment->save();
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error($e->getMessage());
+      SafeLogging::log($this->logger,$e->getMessage());
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
     }
   }
@@ -512,7 +513,7 @@ class StripeConnect extends Stripe {
       }
     }
     catch (\Stripe\Exception\ApiErrorException $e) {
-      $this->logger->error($e->getMessage());
+      SafeLogging::log($this->logger,$e->getMessage());
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
     }
   }

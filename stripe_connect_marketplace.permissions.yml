@@ -81,3 +81,51 @@ update own commerce_order:
   title: 'Update own orders'
   description: 'Update orders placed with stores owned by the user.'
   restrict access: true
+
+manage own store settings:
+  title: 'Manage own store settings'
+  description: 'Allow vendors to manage general settings for their own stores.'
+  restrict access: true
+
+manage own store payment gateways:
+  title: 'Manage payment gateway settings for own store'
+  description: 'Allow vendors to view and manage payment gateway settings for their own stores.'
+  restrict access: true
+
+manage own store tax settings:
+  title: 'Manage tax settings for own store'
+  description: 'Allow vendors to view and manage tax settings for their own stores.'
+  restrict access: true
+
+manage own store shipping methods:
+  title: 'Manage shipping methods for own store'
+  description: 'Allow vendors to view and manage shipping methods for their own stores.'
+  restrict access: true
+
+manage own store inventory settings:
+  title: 'Manage inventory settings for own store'
+  description: 'Allow vendors to view and manage inventory settings for their own stores.'
+  restrict access: true
+
+adjust own product prices:
+  title: 'Adjust prices for own products'
+  description: 'Allow vendors to adjust prices for their own products.'
+  restrict access: true
+
+manage own product promotions:
+  title: 'Manage promotions for own products'
+  description: 'Allow vendors to create and manage promotions for their own products.'
+  restrict access: true
+
+access vendor commerce reports:
+  title: 'Access commerce reports for own store'
+  description: 'Allow vendors to access commerce reports related to their own store.'
+  restrict access: true
+
+view vendor commerce dashboard:
+  title: 'View vendor commerce dashboard'
+  description: 'Allow vendors to view their commerce dashboard.'
+
+manage vendor commerce configuration:
+  title: 'Manage vendor commerce configuration'
+  description: 'Allow vendors to access their commerce configuration.'

@@ -6,6 +6,7 @@ use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\State\StateInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Service for handling failed Stripe operations that need retry.
@@ -98,7 +99,7 @@ class FailedOperationsService {
     $queued_ops[$id] = $item;
     $this->state->set('stripe_connect_marketplace.queued_operations', $queued_ops);
     
-    $this->logger->warning('Queued failed @operation for retry. Error: @error', [
+    SafeLogging::log($this->logger,'Queued failed @operation for retry. Error: @error', [
       '@operation' => $operation,
       '@error' => $error,
     ]);
@@ -175,7 +176,7 @@ class FailedOperationsService {
         if ($data['attempts'] >= $data['max_retries']) {
           // Too many retries, drop it
           $queue->deleteItem($item);
-          $this->logger->error('Dropped @operation after @attempts failed attempts. Last error: @error', [
+          SafeLogging::log($this->logger,'Dropped @operation after @attempts failed attempts. Last error: @error', [
             '@operation' => $data['operation'],
             '@attempts' => $data['attempts'],
             '@error' => $data['error'],
@@ -203,7 +204,7 @@ class FailedOperationsService {
             $queued_ops[$data['id']] = $data;
           }
           
-          $this->logger->info('Requeued @operation for retry attempt @attempt of @max. Next retry at @time.', [
+          SafeLogging::log($this->logger,'Requeued @operation for retry attempt @attempt of @max. Next retry at @time.', [
             '@operation' => $data['operation'],
             '@attempt' => $data['attempts'] + 1,
             '@max' => $data['max_retries'],
@@ -249,7 +250,7 @@ class FailedOperationsService {
           return $this->retryAccountVerification($data['data']);
           
         default:
-          $this->logger->warning('Unknown operation type: @type', [
+          SafeLogging::log($this->logger,'Unknown operation type: @type', [
             '@type' => $operation,
           ]);
           return FALSE;
@@ -258,7 +259,7 @@ class FailedOperationsService {
     catch (\Exception $e) {
       // Update the error message for future retries
       $data['error'] = $e->getMessage();
-      $this->logger->error('Error during retry of @operation: @message', [
+      SafeLogging::log($this->logger,'Error during retry of @operation: @message', [
         '@operation' => $operation,
         '@message' => $e->getMessage(),
       ]);
@@ -279,7 +280,7 @@ class FailedOperationsService {
     // This would need to be implemented based on your specific payment flow
     // For example, you might call the payment service to retry creating a payment
     
-    $this->logger->info('Payment retry implementation required for ID: @id', [
+    SafeLogging::log($this->logger,'Payment retry implementation required for ID: @id', [
       '@id' => $data['payment_id'] ?? 'unknown',
     ]);
     
@@ -298,7 +299,7 @@ class FailedOperationsService {
   protected function retryPayout(array $data) {
     // This would need to be implemented based on your specific payout flow
     
-    $this->logger->info('Payout retry implementation required for account: @account', [
+    SafeLogging::log($this->logger,'Payout retry implementation required for account: @account', [
       '@account' => $data['account_id'] ?? 'unknown',
     ]);
     
@@ -317,7 +318,7 @@ class FailedOperationsService {
   protected function retryAccountVerification(array $data) {
     // Find the account verification service and retry verifying the account
     
-    $this->logger->info('Account verification retry implementation required for: @account', [
+    SafeLogging::log($this->logger,'Account verification retry implementation required for: @account', [
       '@account' => $data['account_id'] ?? 'unknown',
     ]);
     

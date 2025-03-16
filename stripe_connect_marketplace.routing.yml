@@ -69,6 +69,71 @@ stripe_connect_marketplace.vendor_form:
   requirements:
     _permission: 'register as stripe connect vendor'
 
+stripe_connect_marketplace.vendor_store_settings:
+  path: '/vendor/store/{store_id}/settings'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::settingsDashboard'
+    _title: 'Store Settings'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+    store_id: \d+
+  options:
+    parameters:
+      store_id:
+        type: entity:commerce_store
+
+stripe_connect_marketplace.vendor_store_payment_gateways:
+  path: '/vendor/store/{store_id}/payment-gateways'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::paymentGateways'
+    _title: 'Payment Gateways'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+    store_id: \d+
+  options:
+    parameters:
+      store_id:
+        type: entity:commerce_store
+
+stripe_connect_marketplace.vendor_store_tax_settings:
+  path: '/vendor/store/{store_id}/tax-settings'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::taxSettings'
+    _title: 'Tax Settings'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+    store_id: \d+
+  options:
+    parameters:
+      store_id:
+        type: entity:commerce_store
+
+stripe_connect_marketplace.vendor_store_shipping_methods:
+  path: '/vendor/store/{store_id}/shipping-methods'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::shippingMethods'
+    _title: 'Shipping Methods'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+    store_id: \d+
+  options:
+    parameters:
+      store_id:
+        type: entity:commerce_store
+
+stripe_connect_marketplace.vendor_store_inventory:
+  path: '/vendor/store/{store_id}/inventory'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::inventorySettings'
+    _title: 'Inventory Settings'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+    store_id: \d+
+  options:
+    parameters:
+      store_id:
+        type: entity:commerce_store
+
 stripe_connect_marketplace.vendor_terms:
   path: '/vendor/terms'
   defaults:

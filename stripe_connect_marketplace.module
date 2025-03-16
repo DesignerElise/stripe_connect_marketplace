@@ -566,6 +566,18 @@ function stripe_connect_marketplace_preprocess_page(&$variables) {
 }
 
 /**
+ * Implements hook_page_attachments().
+ */
+function stripe_connect_marketplace_page_attachments(array &$attachments) {
+  $route_name = \Drupal::routeMatch()->getRouteName();
+  
+  // Only attach to vendor dashboard routes
+  if (strpos($route_name, 'stripe_connect_marketplace.vendor') === 0) {
+    $attachments['#attached']['library'][] = 'stripe_connect_marketplace/vendor_dashboard';
+  }
+}
+
+/**
  * Implements hook_menu_alter().
  */
 function stripe_connect_marketplace_menu_alter(&$items) {

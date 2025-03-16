@@ -11,6 +11,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\stripe_connect_marketplace\Service\PaymentService;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Form for onboarding vendors to Stripe Connect with direct charges support.
@@ -296,13 +297,13 @@ class OnboardVendorForm extends FormBase {
         
         $user->save();
         
-        $this->logger->info('Created Stripe Connect account for user @uid: @account_id', [
+        SafeLogging::log($this->logger,'Created Stripe Connect account for user @uid: @account_id', [
           '@uid' => $user->id(),
           '@account_id' => $account->id,
         ]);
       }
       else {
-        $this->logger->warning('User entity does not have field_stripe_account_id field');
+        SafeLogging::log($this->logger,'User entity does not have field_stripe_account_id field');
         $this->messenger()->addError($this->t('Unable to save Stripe account information.'));
         return;
       }
@@ -313,7 +314,7 @@ class OnboardVendorForm extends FormBase {
       $this->messenger()->addStatus($this->t('Your Stripe Connect account has been created. You will now be redirected to complete the onboarding process.'));
     }
     catch (\Exception $e) {
-      $this->logger->error('Error creating Stripe Connect account: @message', ['@message' => $e->getMessage()]);
+      SafeLogging::log($this->logger,'Error creating Stripe Connect account: @message', ['@message' => $e->getMessage()]);
       $this->messenger()->addError($this->t('An error occurred while setting up your vendor account: @error', [
         '@error' => $e->getMessage(),
       ]));

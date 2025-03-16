@@ -8,6 +8,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Configure Stripe Connect settings for this site.
@@ -338,7 +339,7 @@ class StripeConnectSettingsForm extends ConfigFormBase {
     $config->save();
     
     // Log the saved configuration for debugging
-    $this->logger->notice('Saved Stripe Connect configuration with application fee: @fee%', [
+    SafeLogging::log($this->logger,'Saved Stripe Connect configuration with application fee: @fee%', [
       '@fee' => $stripe_connect['application_fee_percent'],
     ]);
     

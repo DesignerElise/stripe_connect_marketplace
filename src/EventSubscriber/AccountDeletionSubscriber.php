@@ -10,6 +10,7 @@ use Drupal\stripe_connect_marketplace\Service\AccountVerificationService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Event subscriber for handling Stripe account deletion exceptions.
@@ -97,7 +98,7 @@ class AccountDeletionSubscriber implements EventSubscriberInterface {
         // Display a message to the user if appropriate
         $this->messenger->addWarning(t('The Stripe account associated with this vendor is no longer available. Please contact the site administrator.'));
         
-        $this->logger->warning('Caught deleted Stripe account exception and updated vendor status: @account_id', [
+        SafeLogging::log($this->logger,'Caught deleted Stripe account exception and updated vendor status: @account_id', [
           '@account_id' => $account_id,
         ]);
       }
