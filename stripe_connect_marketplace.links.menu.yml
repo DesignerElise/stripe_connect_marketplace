@@ -11,3 +11,50 @@ stripe_connect_marketplace.admin_dashboard:
   parent: commerce.admin_commerce
   route_name: stripe_connect_marketplace.admin_dashboard
   weight: 20
+
+# Main menu links for vendors
+stripe_connect_marketplace.vendor_menu:
+  title: 'Vendor Dashboard'
+  description: 'Access your vendor dashboard'
+  menu_name: main
+  route_name: stripe_connect_marketplace.vendor_dashboard
+  weight: 10
+  options:
+    attributes:
+      class: ['vendor-dashboard-link']
+  expanded: true
+
+stripe_connect_marketplace.stripe_dashboard:
+  title: 'Stripe Dashboard'
+  description: 'Access your Stripe account dashboard'
+  menu_name: main
+  route_name: stripe_connect_marketplace.stripe_dashboard_redirect
+  weight: 11
+  options:
+    attributes:
+      class: ['stripe-dashboard-link']
+      target: ['_blank']
+      
+stripe_connect_marketplace.vendor_stores:
+  title: 'My Stores'
+  description: 'Manage your stores'
+  menu_name: main
+  route_name: entity.commerce_store.collection
+  parent: stripe_connect_marketplace.vendor_menu
+  weight: 1
+
+stripe_connect_marketplace.vendor_products:
+  title: 'My Products'
+  description: 'Manage your products'
+  menu_name: main
+  route_name: entity.commerce_product.collection
+  parent: stripe_connect_marketplace.vendor_menu
+  weight: 2
+
+stripe_connect_marketplace.vendor_orders:
+  title: 'My Orders'
+  description: 'View and manage orders for your products'
+  menu_name: main
+  route_name: entity.commerce_order.collection
+  parent: stripe_connect_marketplace.vendor_menu
+  weight: 3

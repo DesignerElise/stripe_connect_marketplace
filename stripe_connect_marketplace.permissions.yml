@@ -20,6 +20,18 @@ view stripe connect reports:
   title: 'View Stripe Connect reports'
   description: 'Allow users to view Stripe Connect reports and analytics.'
 
+access vendor menu:
+  title: 'Access vendor menu items'
+  description: 'Allow vendors to see vendor-specific menu items in the main navigation.'
+
+view own vendor dashboard:
+  title: 'View own vendor dashboard'
+  description: 'Allow vendors to view their own vendor dashboard.'
+
+view own vendor profile:
+  title: 'View own vendor profile'
+  description: 'Allow vendors to view and edit their own vendor profile.'
+
 view own commerce_store:
   title: 'View own stores'
   description: 'View stores owned by the user.'

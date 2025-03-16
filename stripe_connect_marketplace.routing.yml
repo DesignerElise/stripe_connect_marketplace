@@ -53,6 +53,14 @@ stripe_connect_marketplace.vendor_dashboard:
   requirements:
     _permission: 'view stripe connect dashboard'
 
+stripe_connect_marketplace.stripe_dashboard_redirect:
+  path: '/vendor/stripe-dashboard'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::stripeDashboardRedirect'
+    _title: 'Stripe Dashboard'
+  requirements:
+    _permission: 'view stripe connect dashboard'
+    
 stripe_connect_marketplace.vendor_form:
   path: '/vendor/register'
   defaults:

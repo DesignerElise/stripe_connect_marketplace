@@ -500,3 +500,30 @@ function stripe_connect_marketplace_update_9003() {
   _stripe_connect_marketplace_create_vendor_role();
   return t('Created vendor role with Commerce permissions.');
 }
+
+/**
+ * Add vendor role permissions for menu access.
+ */
+function stripe_connect_marketplace_update_9004() {
+  // Add new permissions to the vendor role
+  $role = \Drupal::entityTypeManager()->getStorage('user_role')->load('vendor');
+  
+  if ($role) {
+    $new_permissions = [
+      'access vendor menu',
+      'view own vendor dashboard',
+      'view own vendor profile',
+      'view stripe connect dashboard',
+    ];
+    
+    foreach ($new_permissions as $permission) {
+      $role->grantPermission($permission);
+    }
+    
+    $role->save();
+    
+    return t('Added vendor menu access permissions to the vendor role.');
+  }
+  
+  return t('Vendor role not found.');
+}

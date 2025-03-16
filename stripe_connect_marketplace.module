@@ -413,3 +413,148 @@ function stripe_connect_marketplace_log($message, array $variables = [], $level 
       break;
   }
 }
+
+/**
+ * Implements hook_menu_links_discovered_alter().
+ */
+function stripe_connect_marketplace_menu_links_discovered_alter(&$links) {
+  // Add access control for vendor menu items
+  if (isset($links['stripe_connect_marketplace.vendor_menu'])) {
+    $links['stripe_connect_marketplace.vendor_menu']['access_callback'] = '_stripe_connect_marketplace_vendor_menu_access';
+  }
+  
+  if (isset($links['stripe_connect_marketplace.vendor_stores'])) {
+    $links['stripe_connect_marketplace.vendor_stores']['access_callback'] = '_stripe_connect_marketplace_vendor_menu_access';
+  }
+  
+  if (isset($links['stripe_connect_marketplace.vendor_products'])) {
+    $links['stripe_connect_marketplace.vendor_products']['access_callback'] = '_stripe_connect_marketplace_vendor_menu_access';
+  }
+  
+  if (isset($links['stripe_connect_marketplace.vendor_orders'])) {
+    $links['stripe_connect_marketplace.vendor_orders']['access_callback'] = '_stripe_connect_marketplace_vendor_menu_access';
+  }
+}
+
+/**
+ * Access callback for vendor menu items.
+ *
+ * @return bool
+ *   TRUE if the user should see the vendor menu items, FALSE otherwise.
+ */
+function _stripe_connect_marketplace_vendor_menu_access() {
+  $user = \Drupal::currentUser();
+  return $user->hasPermission('access vendor menu') || $user->hasPermission('view stripe connect dashboard');
+}
+
+/**
+ * Implements hook_preprocess_menu().
+ */
+function stripe_connect_marketplace_preprocess_menu(&$variables) {
+  // Handle vendor access to main menu items based on roles/permissions
+  if (isset($variables['menu_name']) && $variables['menu_name'] == 'main') {
+    $user = \Drupal::currentUser();
+    
+    // Show vendor menu items only to vendors or admins
+    $is_vendor = $user->hasRole('vendor');
+    $is_admin = $user->hasPermission('administer stripe connect');
+    
+    if (!$is_vendor && !$is_admin) {
+      // Remove vendor menu items for non-vendors
+      if (isset($variables['items']['stripe_connect_marketplace.vendor_menu'])) {
+        unset($variables['items']['stripe_connect_marketplace.vendor_menu']);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_toolbar_alter().
+ */
+function stripe_connect_marketplace_toolbar_alter(&$items) {
+  // Get current user
+  $user = \Drupal::currentUser();
+  
+  // Add a vendor dashboard link to the toolbar for vendors
+  if ($user->hasRole('vendor') && $user->hasPermission('view stripe connect dashboard')) {
+    $items['vendor_dashboard'] = [
+      '#type' => 'toolbar_item',
+      '#weight' => 999,
+      'tab' => [
+        '#type' => 'link',
+        '#title' => t('Vendor Dashboard'),
+        '#url' => \Drupal\Core\Url::fromRoute('stripe_connect_marketplace.vendor_dashboard'),
+        '#attributes' => [
+          'title' => t('Stripe Connect Vendor Dashboard'),
+          'class' => ['toolbar-icon', 'toolbar-icon-stripe-connect-vendor'],
+        ],
+      ],
+    ];
+  }
+}
+
+/**
+ * Implements hook_theme().
+ * 
+ * This adds a custom container for vendor navigation.
+ */
+function stripe_connect_marketplace_theme_registry_alter(&$theme_registry) {
+  // Add a preprocess function for page to add vendor sidebar
+  if (isset($theme_registry['page'])) {
+    $theme_registry['page']['preprocess functions'][] = 'stripe_connect_marketplace_preprocess_page';
+  }
+}
+
+/**
+ * Implements template_preprocess_page().
+ */
+function stripe_connect_marketplace_preprocess_page(&$variables) {
+  $user = \Drupal::currentUser();
+  
+  // Add vendor sidebar for vendors
+  if ($user->hasRole('vendor')) {
+    $variables['vendor_sidebar'] = [
+      '#theme' => 'item_list',
+      '#title' => t('Vendor Menu'),
+      '#items' => [
+        [
+          '#type' => 'link',
+          '#title' => t('Dashboard'),
+          '#url' => \Drupal\Core\Url::fromRoute('stripe_connect_marketplace.vendor_dashboard'),
+          '#attributes' => ['class' => ['vendor-nav-item', 'vendor-dashboard']],
+        ],
+        [
+          '#type' => 'link',
+          '#title' => t('Stripe Dashboard'),
+          '#url' => \Drupal\Core\Url::fromRoute('stripe_connect_marketplace.stripe_dashboard_redirect'),
+          '#attributes' => [
+            'class' => ['vendor-nav-item', 'stripe-dashboard'],
+            'target' => '_blank',
+          ],
+        ],
+        [
+          '#type' => 'link',
+          '#title' => t('My Stores'),
+          '#url' => \Drupal\Core\Url::fromRoute('entity.commerce_store.collection'),
+          '#attributes' => ['class' => ['vendor-nav-item', 'vendor-stores']],
+        ],
+        [
+          '#type' => 'link',
+          '#title' => t('My Products'),
+          '#url' => \Drupal\Core\Url::fromRoute('entity.commerce_product.collection'),
+          '#attributes' => ['class' => ['vendor-nav-item', 'vendor-products']],
+        ],
+        [
+          '#type' => 'link',
+          '#title' => t('My Orders'),
+          '#url' => \Drupal\Core\Url::fromRoute('entity.commerce_order.collection'),
+          '#attributes' => ['class' => ['vendor-nav-item', 'vendor-orders']],
+        ],
+      ],
+      '#attributes' => ['class' => ['vendor-sidebar-nav']],
+    ];
+    
+    // Attach vendor sidebar CSS
+    $variables['#attached']['library'][] = 'stripe_connect_marketplace/vendor_sidebar';
+  }
+}

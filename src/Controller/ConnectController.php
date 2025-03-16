@@ -15,6 +15,8 @@ use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\stripe_connect_marketplace\Service\PaymentService;
 use Drupal\stripe_connect_marketplace\Service\PayoutService;
 use Drupal\stripe_connect_marketplace\StripeApiService;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
+
 
 /**
  * Controller for handling Stripe Connect onboarding flow.
@@ -841,6 +843,106 @@ class ConnectController extends ControllerBase {
       return [
         '#markup' => $this->t('An error occurred while loading the admin dashboard. Please try again later.'),
       ];
+    }
+  }
+
+  /**
+   * Redirects the vendor to their Stripe Dashboard.
+   *
+   * This method should be added to the ConnectController class.
+   *
+   * @return \Symfony\Component\HttpFoundation\RedirectResponse
+   *   A redirect to the Stripe dashboard or back to vendor dashboard if not available.
+   */
+  public function stripeDashboardRedirect() {
+    try {
+      // Check if user is logged in
+      if ($this->currentUser->isAnonymous()) {
+        $this->messenger()->addError($this->t('You must be logged in to access your Stripe dashboard.'));
+        return new RedirectResponse(Url::fromRoute('user.login')->toString());
+      }
+      
+      // Load the full user entity
+      $user = $this->entityTypeManager->getStorage('user')->load($this->currentUser->id());
+      
+      // Check if user has a Stripe account
+      if (!$user->hasField('field_stripe_account_id') || $user->get('field_stripe_account_id')->isEmpty()) {
+        $this->messenger()->addWarning($this->t('You do not have a Stripe account. Please set up your vendor account first.'));
+        return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->toString());
+      }
+      
+      // Get the Stripe account ID
+      $account_id = $user->get('field_stripe_account_id')->value;
+      
+      // Check if the vendor status is marked as 'deleted'
+      if ($user->hasField('field_vendor_status') && $user->get('field_vendor_status')->value == 'deleted') {
+        $this->messenger()->addError($this->t('Your Stripe account appears to have been deleted or is no longer accessible. Please contact the marketplace administrator.'));
+        return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->toString());
+      }
+      
+      // Prepare options for connected account operations
+      $options = ['stripe_account' => $account_id];
+      
+      try {
+        // Retrieve the account using the StripeApi service
+        $account = $this->stripeApi->retrieve('Account', $account_id);
+        
+        // Get appropriate link based on account status
+        if ($account->details_submitted && $account->charges_enabled) {
+          // Create login link for complete accounts
+          try {
+            $dashboard_link = $this->stripeApi->create('LoginLink', [
+              'account' => $account_id,
+            ]);
+            
+            // Redirect directly to Stripe dashboard
+            return new TrustedRedirectResponse($dashboard_link->url);
+          }
+          catch (\Exception $e) {
+            SafeLogging::log($this->logger, 'Error creating dashboard link: @message', ['@message' => $e->getMessage()]);
+            $this->messenger()->addError($this->t('Unable to access your Stripe dashboard. Please try again later.'));
+          }
+        }
+        else {
+          // Create onboarding link for incomplete accounts
+          try {
+            $refresh_url = Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')
+              ->setAbsolute()
+              ->toString();
+              
+            $return_url = Url::fromRoute('stripe_connect_marketplace.onboard_complete')
+              ->setAbsolute()
+              ->toString();
+            
+            $onboarding_link = $this->stripeApi->create('AccountLink', [
+              'account' => $account_id,
+              'refresh_url' => $refresh_url,
+              'return_url' => $return_url,
+              'type' => 'account_onboarding',
+            ]);
+            
+            // Redirect to complete onboarding
+            $this->messenger()->addStatus($this->t('Your account setup needs to be completed before accessing your Stripe dashboard.'));
+            return new TrustedRedirectResponse($onboarding_link->url);
+          }
+          catch (\Exception $e) {
+            SafeLogging::log($this->logger, 'Error creating onboarding link: @message', ['@message' => $e->getMessage()]);
+            $this->messenger()->addError($this->t('Unable to access your Stripe dashboard. Please try again later.'));
+          }
+        }
+      }
+      catch (\Exception $e) {
+        SafeLogging::log($this->logger, 'Error accessing Stripe account: @message', ['@message' => $e->getMessage()]);
+        $this->messenger()->addError($this->t('Unable to access your Stripe dashboard. Please try again later.'));
+      }
+      
+      // Fallback to vendor dashboard
+      return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->toString());
+    }
+    catch (\Exception $e) {
+      SafeLogging::log($this->logger, 'Error in stripeDashboardRedirect: @message', ['@message' => $e->getMessage()]);
+      $this->messenger()->addError($this->t('An error occurred. Please try again later.'));
+      return new RedirectResponse(Url::fromRoute('stripe_connect_marketplace.vendor_dashboard')->toString());
     }
   }
 }

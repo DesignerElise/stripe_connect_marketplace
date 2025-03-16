@@ -1,0 +1,123 @@
+/**
+ * Vendor sidebar navigation styles
+ */
+ .vendor-sidebar-nav {
+  background-color: #f7f9fc;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  padding: 0;
+  margin-bottom: 20px;
+}
+
+.vendor-sidebar-nav h3 {
+  background-color: #6772e5;
+  color: white;
+  padding: 12px 15px;
+  margin: 0;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.vendor-sidebar-nav .item-list {
+  padding: 0;
+  margin: 0;
+}
+
+.vendor-sidebar-nav .item-list h3 {
+  background-color: #6772e5;
+  color: white;
+  padding: 12px 15px;
+  margin: 0;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.vendor-sidebar-nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vendor-sidebar-nav li {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.vendor-sidebar-nav li:last-child {
+  border-bottom: none;
+}
+
+.vendor-sidebar-nav li a {
+  display: block;
+  padding: 12px 15px;
+  text-decoration: none;
+  color: #333;
+  transition: background-color 0.2s ease;
+}
+
+.vendor-sidebar-nav li a:hover,
+.vendor-sidebar-nav li a:focus {
+  background-color: #f0f0f0;
+  color: #6772e5;
+  text-decoration: none;
+}
+
+.vendor-sidebar-nav li a.is-active {
+  background-color: #e6ebf8;
+  color: #6772e5;
+  font-weight: bold;
+  border-left: 3px solid #6772e5;
+}
+
+/* Icons for vendor navigation items */
+.vendor-sidebar-nav .vendor-dashboard::before {
+  content: "📊";
+  margin-right: 8px;
+}
+
+.vendor-sidebar-nav .stripe-dashboard::before {
+  content: "💳";
+  margin-right: 8px;
+}
+
+.vendor-sidebar-nav .vendor-stores::before {
+  content: "🏪";
+  margin-right: 8px;
+}
+
+.vendor-sidebar-nav .vendor-products::before {
+  content: "📦";
+  margin-right: 8px;
+}
+
+.vendor-sidebar-nav .vendor-orders::before {
+  content: "📋";
+  margin-right: 8px;
+}
+
+/* Main menu vendor navigation styling */
+.menu--main .vendor-dashboard-link > a {
+  color: #6772e5;
+  font-weight: bold;
+}
+
+.menu--main .vendor-dashboard-link > a:hover,
+.menu--main .vendor-dashboard-link > a:focus {
+  color: #424cb9;
+}
+
+/* Main menu Stripe dashboard styling */
+.menu--main .stripe-dashboard-link > a {
+  color: #6772e5;
+  font-weight: bold;
+}
+
+.menu--main .stripe-dashboard-link > a:hover,
+.menu--main .stripe-dashboard-link > a:focus {
+  color: #424cb9;
+}
