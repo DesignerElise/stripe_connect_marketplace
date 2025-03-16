@@ -11,6 +11,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Access\AccessResult;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Implements hook_help().
@@ -372,7 +373,7 @@ function stripe_connect_marketplace_mail($key, &$message, $params) {
 function stripe_connect_marketplace_log($message, array $variables = [], $level = 'error') {
   // Use the utility class for logging if available
   if (class_exists('\Drupal\stripe_connect_marketplace\Utility\SafeLogging')) {
-    \Drupal\stripe_connect_marketplace\Utility\SafeLogging::moduleLog($message, $variables, $level);
+    SafeLogging::moduleLog($message, $variables, $level);
     return;
   }
   

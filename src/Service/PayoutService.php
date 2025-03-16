@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\stripe_connect_marketplace\StripeApiService;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Service for handling Stripe Connect payouts.

@@ -6,6 +6,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\stripe_connect_marketplace\StripeApiService;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Service for verifying vendor Stripe accounts and detecting deleted accounts.

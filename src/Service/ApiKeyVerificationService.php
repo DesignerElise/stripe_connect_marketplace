@@ -9,6 +9,8 @@ use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Mail\MailManagerInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\stripe_connect_marketplace\StripeApiService;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
+
 
 /**
  * Service to verify Stripe API keys and notify admins about issues.

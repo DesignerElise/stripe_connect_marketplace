@@ -6,6 +6,8 @@ use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\State\StateInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
+
 
 /**
  * Service for handling failed Stripe operations that need retry.

@@ -4,6 +4,7 @@ namespace Drupal\stripe_connect_marketplace;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
 
 /**
  * Provides integration with the Stripe API.
@@ -369,6 +370,7 @@ class StripeApiService {
    */
   protected function createMockResource($resource, array $params) {
     $mock = new \stdClass();
+    $mock->id = 'mock_' . md5(uniqid('', TRUE)); // Ensure id is always set
     
     switch ($resource) {
       case 'Account':
@@ -406,7 +408,6 @@ class StripeApiService {
         break;
         
       default:
-        $mock->id = 'mock_' . md5(uniqid('', TRUE));
         $mock->object = strtolower($resource);
         $mock->created = time();
     }
@@ -434,7 +435,7 @@ class StripeApiService {
    */
   protected function retrieveMockResource($resource, $id, array $params = []) {
     $mock = new \stdClass();
-    $mock->id = $id;
+    $mock->id = $id ?: 'mock_' . md5(uniqid('', TRUE)); // Ensure id is always set
     $mock->object = strtolower($resource);
     $mock->created = time() - 86400; // Yesterday
     
@@ -463,7 +464,7 @@ class StripeApiService {
     
     SafeLogging::log($this->logger, 'Retrieved mock @resource: @id', [
       '@resource' => $resource,
-      '@id' => $id,
+      '@id' => $id ?: 'null',
     ]);
     
     return $mock;
@@ -501,7 +502,7 @@ class StripeApiService {
     
     SafeLogging::log($this->logger, 'Updated mock @resource: @id', [
       '@resource' => $resource,
-      '@id' => $id,
+      '@id' => $id ?: 'null',
     ]);
     
     return $mock;

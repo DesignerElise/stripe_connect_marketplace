@@ -6,6 +6,8 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\stripe_connect_marketplace\StripeApiService;
+use Drupal\stripe_connect_marketplace\Utility\SafeLogging;
+
 
 /**
  * Service for handling Stripe Connect payments.
