@@ -19,20 +19,42 @@ stripe_js:
     - core/jquery.once
     - core/drupalSettings
 
-vendor_terms:
+stripe_connect_main:
   version: 1.x
-  css:
-    theme:
-      css/vendor-terms.css: {}
-
-vendor_sidebar:
-  version: 1.x
-  css:
-    theme:
-      css/vendor-sidebar.css: {}
+  js:
+    js/stripe_connect_main.js: {}
+  dependencies:
+    - core/drupal
+    - core/jquery
+    - core/once
+    - react_dashboard/react
+    - react_dashboard/react-dom
 
 vendor_action_buttons:
   version: 1.x
   css:
     theme:
       css/vendor-action-buttons.css: {}
+
+vendor_commerce_dashboard:
+  version: 1.x
+  js:
+    js/dist/vendor-commerce-dashboard.js: {}
+  dependencies:
+    - core/drupal
+    - core/jquery
+    - core/once
+    - react_dashboard/react
+    - react_dashboard/react-dom
+
+vendor_sidebar:
+  version: 1.x
+  css:
+    theme:
+      css/vendor-sidebar.css: {}
+      
+vendor_terms:
+  version: 1.x
+  css:
+    theme:
+      css/vendor-terms.css: {}

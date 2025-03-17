@@ -175,45 +175,495 @@ function stripe_connect_marketplace_commerce_store_presave(EntityInterface $enti
 function stripe_connect_marketplace_form_alter(&$form, FormStateInterface $form_state, $form_id) {
   $current_user = \Drupal::currentUser();
   
-  // Modify store form for vendors
-  if ($form_id === 'commerce_store_form' && $current_user->hasRole('vendor')) {
-    // Hide the owner field - vendors can only create stores they own
-    if (isset($form['uid'])) {
-      $form['uid']['#access'] = FALSE;
-      
-      // Set the current user as the owner
-      $form['uid']['widget'][0]['target_id']['#default_value'] = $current_user;
-    }
+  // Only modify forms for vendors
+  if (!$current_user->hasRole('vendor')) {
+    return;
   }
   
-  // Modify product form for vendors
-  if (str_starts_with($form_id, 'commerce_product_') && str_ends_with($form_id, '_form') && $current_user->hasRole('vendor')) {
-    // Limit store selection to vendor's own stores
-    if (isset($form['stores']['widget'])) {
-      $vendor_access = \Drupal::service('stripe_connect_marketplace.vendor_access');
-      $user_store_ids = $vendor_access->getUserStoreIds($current_user->id());
+  // Add CSRF protection to all forms we modify
+  $form['#token'] = TRUE;
+
+  // Add vendor context to Commerce forms
+  $commerce_forms = [
+    'commerce_payment_gateway_form',
+    'commerce_tax_type_form',
+    'commerce_shipping_method_form',
+    'commerce_promotion_form',
+    'commerce_product_variation_type_form',
+  ];
+  
+  if (in_array($form_id, $commerce_forms)) {
+    // Get form object and ensure it has an entity
+    $form_object = $form_state->getFormObject();
+    
+    // Check if form object exists and has getEntity method
+    if (!$form_object || !method_exists($form_object, 'getEntity')) {
+      SafeLogging::log(\Drupal::logger('stripe_connect_marketplace'), 
+        'Form @form_id does not have a valid entity form object', [
+        '@form_id' => $form_id,
+      ], 'warning');
+      return;
+    }
+    
+    $form_entity = $form_object->getEntity();
+    if (!$form_entity) {
+      SafeLogging::log(\Drupal::logger('stripe_connect_marketplace'), 
+        'Form entity not found for @form_id', [
+        '@form_id' => $form_id,
+      ], 'warning');
+      return;
+    }
+    
+    // Get request parameters to check for vendor context
+    $vendor_context = \Drupal::request()->query->get('vendor_context') === 'true';
+    $store_id = \Drupal::request()->query->get('store_id');
+    
+    if ($vendor_context && $store_id) {
+      // Load the store
+      $store = \Drupal::entityTypeManager()->getStorage('commerce_store')->load($store_id);
       
-      // If user has stores, limit the options
-      if (!empty($user_store_ids)) {
-        $store_options = $form['stores']['widget']['#options'];
+      // Only proceed if this is the vendor's store
+      if ($store && $store->getOwnerId() == $current_user->id()) {
+        // Add vendor context to the form
+        $form['vendor_context'] = [
+          '#type' => 'value',
+          '#value' => TRUE,
+        ];
         
-        // Filter options to only include user's stores
-        foreach ($store_options as $key => $option) {
-          if ($key === '_none') {
-            continue;
-          }
-          
-          // Extract store ID from option key (format: "entity:commerce_store/1")
-          $parts = explode('/', $key);
-          $store_id = end($parts);
-          
-          if (!in_array($store_id, $user_store_ids)) {
-            unset($form['stores']['widget']['#options'][$key]);
-          }
+        $form['vendor_store_id'] = [
+          '#type' => 'value',
+          '#value' => $store_id,
+        ];
+        
+        // Add vendor context display
+        $form['vendor_context_display'] = [
+          '#type' => 'container',
+          '#weight' => -100,
+          '#attributes' => ['class' => ['vendor-context-message']],
+          'message' => [
+            '#markup' => t('You are configuring this setting for your store: <strong>@store</strong>', 
+              ['@store' => $store->label()]),
+          ],
+        ];
+        
+        // Add a cancel button that returns to the vendor store settings page
+        $form['actions']['cancel'] = [
+          '#type' => 'link',
+          '#title' => t('Cancel'),
+          '#url' => \Drupal\Core\Url::fromRoute('stripe_connect_marketplace.vendor_store_settings', 
+            ['store_id' => $store_id]),
+          '#attributes' => ['class' => ['button']],
+          '#weight' => 100,
+        ];
+        
+        // Modify the form based on entity type
+        switch (get_class($form_entity)) {
+          case 'Drupal\commerce_payment\Entity\PaymentGateway':
+            _stripe_connect_marketplace_modify_payment_gateway_form($form, $form_state, $store);
+            break;
+            
+          case 'Drupal\commerce_tax\Entity\TaxType':
+            _stripe_connect_marketplace_modify_tax_type_form($form, $form_state, $store);
+            break;
+            
+          case 'Drupal\commerce_shipping\Entity\ShippingMethod':
+            _stripe_connect_marketplace_modify_shipping_method_form($form, $form_state, $store);
+            break;
+            
+          case 'Drupal\commerce_promotion\Entity\Promotion':
+            _stripe_connect_marketplace_modify_promotion_form($form, $form_state, $store);
+            break;
         }
       }
     }
   }
+
+  // Handle Commerce product and product variation forms (as a separate case)
+  if (strpos($form_id, 'commerce_product_') === 0 || strpos($form_id, 'commerce_product_variation_') === 0) {
+    // Get form object and ensure it has an entity
+    $form_object = $form_state->getFormObject();
+    
+    // Check if form object exists and has getEntity method
+    if (!$form_object || !method_exists($form_object, 'getEntity')) {
+      return;
+    }
+    
+    _stripe_connect_marketplace_modify_product_form($form, $form_state, $current_user->id());
+  }
+}
+
+/**
+ * Modifies payment gateway forms for vendors.
+ */
+function _stripe_connect_marketplace_modify_payment_gateway_form(&$form, $form_state, $store) {
+  // Simplify the form for vendors
+  
+  // Restrict store selection to only the vendor's store
+  if (isset($form['stores'])) {
+    $form['stores']['#access'] = FALSE;
+    $form['stores']['#default_value'] = [$store->id()];
+  }
+  
+  // Hide advanced settings
+  if (isset($form['configuration']['panes'])) {
+    $form['configuration']['panes']['#access'] = FALSE;
+  }
+  
+  // Add explanation text
+  $form['vendor_payment_message'] = [
+    '#type' => 'markup',
+    '#markup' => t('<p>This payment method will be available for customers purchasing from your store.</p>'),
+    '#weight' => -90,
+  ];
+}
+
+/**
+ * Modifies tax type forms for vendors.
+ */
+function _stripe_connect_marketplace_modify_tax_type_form(&$form, $form_state, $store) {
+  // Simplify tax configuration for vendors
+  
+  // Hide complex tax settings
+  if (isset($form['configuration']['strategies'])) {
+    $form['configuration']['strategies']['#access'] = FALSE;
+  }
+  
+  // Add explanation text
+  $form['vendor_tax_message'] = [
+    '#type' => 'markup',
+    '#markup' => t('<p>This tax configuration will apply to products in your store.</p>'),
+    '#weight' => -90,
+  ];
+}
+
+/**
+ * Modifies shipping method forms for vendors.
+ */
+function _stripe_connect_marketplace_modify_shipping_method_form(&$form, $form_state, $store) {
+  // Restrict store selection to only the vendor's store
+  if (isset($form['stores'])) {
+    $form['stores']['#access'] = FALSE;
+    $form['stores']['#default_value'] = [$store->id()];
+  }
+  
+  // Add explanation text
+  $form['vendor_shipping_message'] = [
+    '#type' => 'markup',
+    '#markup' => t('<p>This shipping method will be available for customers purchasing from your store.</p>'),
+    '#weight' => -90,
+  ];
+}
+
+/**
+ * Modifies promotion forms for vendors.
+ */
+function _stripe_connect_marketplace_modify_promotion_form(&$form, $form_state, $store) {
+  // Restrict store selection to only the vendor's store
+  if (isset($form['stores'])) {
+    $form['stores']['#access'] = FALSE;
+    $form['stores']['#default_value'] = [$store->id()];
+  }
+  
+  // Add explanation text
+  $form['vendor_promotion_message'] = [
+    '#type' => 'markup',
+    '#markup' => t('<p>This promotion will apply to products in your store.</p>'),
+    '#weight' => -90,
+  ];
+  
+  // Limit offer types for vendors if needed
+  if (isset($form['offer']['plugin_id'])) {
+    // You can restrict certain offer types if necessary
+    // For example, maybe vendors shouldn't be able to offer free shipping
+    /*
+    $options = $form['offer']['plugin_id']['#options'];
+    unset($options['order_free_shipping']);
+    $form['offer']['plugin_id']['#options'] = $options;
+    */
+  }
+  
+  // Ensure compatibility with vendor's product types
+  if (isset($form['conditions'])) {
+    // Additional logic could be added here to ensure conditions are compatible
+    // with the vendor's products
+  }
+}
+
+/**
+ * Modifies product and product variation forms for vendors.
+ */
+function _stripe_connect_marketplace_modify_product_form(&$form, $form_state, $vendor_id) {
+  // Get the product entity if available
+  $product_entity = NULL;
+  $form_object = $form_state->getFormObject();
+  if (method_exists($form_object, 'getEntity')) {
+    $product_entity = $form_object->getEntity();
+  }
+  
+  // Restrict store selection to only vendor's stores
+  if (isset($form['stores']['widget'])) {
+    // Get vendor's stores
+    $store_query = \Drupal::entityTypeManager()->getStorage('commerce_store')->getQuery()
+      ->condition('uid', $vendor_id)
+      ->accessCheck(TRUE);
+    $store_ids = $store_query->execute();
+    
+    if (!empty($store_ids)) {
+      // Filter the options
+      $options = $form['stores']['widget']['#options'];
+      $filtered_options = ['_none' => $options['_none']]; // Keep the "none" option
+      
+      foreach ($options as $key => $option) {
+        if ($key === '_none') {
+          continue;
+        }
+        
+        // Extract store ID from option key (format: "entity:commerce_store/1")
+        $parts = explode('/', $key);
+        $store_id = end($parts);
+        
+        if (in_array($store_id, $store_ids)) {
+          $filtered_options[$key] = $option;
+        }
+      }
+      
+      $form['stores']['widget']['#options'] = $filtered_options;
+      
+      // If there's only one store (plus _none), select it by default for new products
+      if (count($filtered_options) === 2 && !$product_entity->isNew()) {
+        // Get the first real option (not _none)
+        $store_keys = array_keys($filtered_options);
+        $store_key = $store_keys[1]; // Index 1 because 0 is '_none'
+        
+        // Set default value
+        $form['stores']['widget']['#default_value'] = [$store_key];
+      }
+    }
+  }
+  
+  // Add vendor context to the form
+  $form['vendor_product_message'] = [
+    '#type' => 'markup',
+    '#markup' => t('<p>This product will be available in your store.</p>'),
+    '#weight' => -90,
+  ];
+  
+  // For product variations, restrict pricing and SKU field access
+  if (isset($form['price']) && isset($form['sku'])) {
+    // This is likely a product variation form
+    
+    // Check if vendor has permission to adjust prices
+    $current_user = \Drupal::currentUser();
+    if (!$current_user->hasPermission('adjust own product prices')) {
+      $form['price']['#access'] = FALSE;
+      
+      // If price is required, we need to set a default value
+      if (isset($form['price']['widget'][0]['amount']['#required']) && 
+          $form['price']['widget'][0]['amount']['#required']) {
+        $form['price']['widget'][0]['amount']['#required'] = FALSE;
+        
+        // Set a default price value from configuration if this is a new variation
+        if ($product_entity && $product_entity->isNew()) {
+          $config = \Drupal::config('stripe_connect_marketplace.settings');
+          $default_price = $config->get('default_product_price') ?: '0.00';
+          
+          $form['price']['widget'][0]['amount']['#default_value'] = $default_price;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_presave().
+ */
+function stripe_connect_marketplace_entity_presave($entity) {
+  // Store vendor info in Commerce entities
+  $current_user = \Drupal::currentUser();
+  
+  // Only process for vendor users
+  if (!$current_user->hasRole('vendor')) {
+    return;
+  }
+  
+  $entity_type = $entity->getEntityTypeId();
+  
+  // For Commerce entities, store vendor context
+  $commerce_entities = [
+    'commerce_payment_gateway',
+    'commerce_tax_type',
+    'commerce_shipping_method',
+    'commerce_promotion',
+  ];
+  
+  if (in_array($entity_type, $commerce_entities)) {
+    // Store vendor ID in a field or metadata if available
+    if ($entity->hasField('field_vendor_id')) {
+      $entity->set('field_vendor_id', $current_user->id());
+    }
+    
+    // Special handling for different entity types
+    switch ($entity_type) {
+      case 'commerce_payment_gateway':
+        _stripe_connect_marketplace_handle_payment_gateway_save($entity, $current_user->id());
+        break;
+        
+      case 'commerce_promotion':
+        _stripe_connect_marketplace_handle_promotion_save($entity, $current_user->id());
+        break;
+    }
+  }
+  
+  // Products and variations need special handling
+  if ($entity_type === 'commerce_product' || $entity_type === 'commerce_product_variation') {
+    _stripe_connect_marketplace_handle_product_save($entity, $current_user->id());
+  }
+}
+
+/**
+ * Handles payment gateway entity saves for vendors.
+ */
+function _stripe_connect_marketplace_handle_payment_gateway_save($gateway, $vendor_id) {
+  // Get vendor's store
+  $store = _stripe_connect_marketplace_get_vendor_store($vendor_id);
+  if (!$store) {
+    return;
+  }
+  
+  // Ensure the gateway is associated with the vendor's store
+  if ($store->hasField('field_payment_gateways')) {
+    $gateway_values = $store->get('field_payment_gateways')->getValue();
+    $gateway_ids = array_column($gateway_values, 'target_id');
+    
+    // Add this gateway if not already associated
+    if (!in_array($gateway->id(), $gateway_ids)) {
+      $gateway_values[] = ['target_id' => $gateway->id()];
+      $store->set('field_payment_gateways', $gateway_values);
+      $store->save();
+    }
+  }
+}
+
+/**
+ * Handles promotion entity saves for vendors.
+ */
+function _stripe_connect_marketplace_handle_promotion_save($promotion, $vendor_id) {
+  // Get vendor's store
+  $store = _stripe_connect_marketplace_get_vendor_store($vendor_id);
+  if (!$store) {
+    return;
+  }
+  
+  // Ensure the promotion is associated with the vendor's store
+  $store_ids = [];
+  foreach ($promotion->getStores() as $promo_store) {
+    $store_ids[] = $promo_store->id();
+  }
+  
+  if (!in_array($store->id(), $store_ids)) {
+    $store_ids[] = $store->id();
+    $promotion->setStoreIds($store_ids);
+  }
+  
+  // Optionally track this in the store entity
+  if ($store->hasField('field_promotions')) {
+    $promotion_values = $store->get('field_promotions')->getValue();
+    $promotion_ids = array_column($promotion_values, 'target_id');
+    
+    // Add this promotion if not already associated
+    if (!in_array($promotion->id(), $promotion_ids)) {
+      $promotion_values[] = ['target_id' => $promotion->id()];
+      $store->set('field_promotions', $promotion_values);
+      $store->save();
+    }
+  }
+}
+
+/**
+ * Handles product and variation entity saves for vendors.
+ */
+function _stripe_connect_marketplace_handle_product_save($entity, $vendor_id) {
+  // For products, enforce association with vendor's store(s)
+  if ($entity->getEntityTypeId() === 'commerce_product') {
+    $vendor_store_ids = _stripe_connect_marketplace_get_vendor_store_ids($vendor_id);
+    if (empty($vendor_store_ids)) {
+      return;
+    }
+    
+    // Get current store IDs
+    $current_store_ids = [];
+    foreach ($entity->getStores() as $store) {
+      $current_store_ids[] = $store->id();
+    }
+    
+    // Make sure at least one of the vendor's stores is associated
+    $has_vendor_store = false;
+    foreach ($current_store_ids as $store_id) {
+      if (in_array($store_id, $vendor_store_ids)) {
+        $has_vendor_store = true;
+        break;
+      }
+    }
+    
+    // If no vendor store is associated, add the first one
+    if (!$has_vendor_store && !empty($vendor_store_ids)) {
+      $current_store_ids[] = reset($vendor_store_ids);
+      $entity->setStoreIds($current_store_ids);
+    }
+  }
+  
+  // For variations, handle any vendor-specific adjustments
+  if ($entity->getEntityTypeId() === 'commerce_product_variation') {
+    // Potentially set default commission rates, etc.
+    if ($entity->hasField('field_vendor_commission')) {
+      // Only set a default commission rate for new variations
+      if ($entity->isNew() && $entity->get('field_vendor_commission')->isEmpty()) {
+        // Get the default commission rate from config
+        $config = \Drupal::config('stripe_connect_marketplace.settings');
+        $default_commission = $config->get('default_vendor_commission') ?: 0;
+        
+        $entity->set('field_vendor_commission', $default_commission);
+      }
+    }
+  }
+}
+
+/**
+ * Gets a vendor's store.
+ *
+ * @param int $vendor_id
+ *   The vendor user ID.
+ *
+ * @return \Drupal\commerce_store\Entity\StoreInterface|null
+ *   The store entity, or NULL if not found.
+ */
+function _stripe_connect_marketplace_get_vendor_store($vendor_id) {
+  $store_id = _stripe_connect_marketplace_get_vendor_store_id($vendor_id);
+  if (!$store_id) {
+    return NULL;
+  }
+  
+  return \Drupal::entityTypeManager()->getStorage('commerce_store')->load($store_id);
+}
+
+/**
+ * Gets all store IDs for a vendor.
+ *
+ * @param int $vendor_id
+ *   The vendor user ID.
+ *
+ * @return array
+ *   Array of store IDs.
+ */
+function _stripe_connect_marketplace_get_vendor_store_ids($vendor_id) {
+  // Query for stores owned by the vendor
+  $query = \Drupal::entityTypeManager()->getStorage('commerce_store')->getQuery()
+    ->condition('uid', $vendor_id)
+    ->accessCheck(TRUE)
+    ->sort('created', 'DESC')
+    ->range(0, 1);
+  
+  return $query->execute();
 }
 
 /**
@@ -424,21 +874,35 @@ function stripe_connect_marketplace_log($message, array $variables = [], $level 
  * Implements hook_menu_links_discovered_alter().
  */
 function stripe_connect_marketplace_menu_links_discovered_alter(&$links) {
-  // Add access control for vendor menu items
-  if (isset($links['stripe_connect_marketplace.vendor_menu'])) {
-    $links['stripe_connect_marketplace.vendor_menu']['access_callback'] = '_stripe_connect_marketplace_vendor_menu_access';
+  // Only process for vendors
+  $user = \Drupal::currentUser();
+  if (!$user->hasRole('vendor')) {
+    return;
   }
   
-  if (isset($links['stripe_connect_marketplace.vendor_stores'])) {
-    $links['stripe_connect_marketplace.vendor_stores']['access_callback'] = '_stripe_connect_marketplace_vendor_menu_access';
-  }
+  // Find store settings links that need dynamic store ID
+  $store_setting_links = [
+    'stripe_connect_marketplace.vendor_store_settings_link',
+    'stripe_connect_marketplace.vendor_store_payment_gateways_link',
+    'stripe_connect_marketplace.vendor_store_tax_settings_link',
+    'stripe_connect_marketplace.vendor_store_shipping_methods_link',
+    'stripe_connect_marketplace.vendor_store_inventory_link',
+  ];
   
-  if (isset($links['stripe_connect_marketplace.vendor_products'])) {
-    $links['stripe_connect_marketplace.vendor_products']['access_callback'] = '_stripe_connect_marketplace_vendor_menu_access';
-  }
-  
-  if (isset($links['stripe_connect_marketplace.vendor_orders'])) {
-    $links['stripe_connect_marketplace.vendor_orders']['access_callback'] = '_stripe_connect_marketplace_vendor_menu_access';
+  foreach ($store_setting_links as $link_id) {
+    if (isset($links[$link_id])) {
+      // Get the vendor's store ID
+      $store_id = _stripe_connect_marketplace_get_vendor_store_id($user->id());
+      
+      if ($store_id) {
+        // Update the route parameter with the correct store ID
+        $links[$link_id]['route_parameters']['store_id'] = $store_id;
+      }
+      else {
+        // No store found, hide this link
+        unset($links[$link_id]);
+      }
+    }
   }
 }
 

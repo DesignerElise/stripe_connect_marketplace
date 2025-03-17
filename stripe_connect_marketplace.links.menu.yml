@@ -58,3 +58,48 @@ stripe_connect_marketplace.vendor_orders:
   route_name: entity.commerce_order.collection
   parent: stripe_connect_marketplace.vendor_menu
   weight: 3
+
+stripe_connect_marketplace.vendor_store_settings_link:
+  title: 'Store Settings'
+  route_name: stripe_connect_marketplace.vendor_store_settings
+  menu_name: vendor_menu
+  parent: stripe_connect_marketplace.vendor_stores
+  weight: 5
+  route_parameters:
+    store_id: '1'  # This will be replaced dynamically in hook_menu_links_discovered_alter
+
+stripe_connect_marketplace.vendor_store_payment_gateways_link:
+  title: 'Payment Gateways'
+  route_name: stripe_connect_marketplace.vendor_store_payment_gateways
+  menu_name: vendor_menu
+  parent: stripe_connect_marketplace.vendor_store_settings_link
+  weight: 1
+  route_parameters:
+    store_id: '1'  # This will be replaced dynamically
+
+stripe_connect_marketplace.vendor_store_tax_settings_link:
+  title: 'Tax Settings'
+  route_name: stripe_connect_marketplace.vendor_store_tax_settings
+  menu_name: vendor_menu
+  parent: stripe_connect_marketplace.vendor_store_settings_link
+  weight: 2
+  route_parameters:
+    store_id: '1'  # This will be replaced dynamically
+
+stripe_connect_marketplace.vendor_store_shipping_methods_link:
+  title: 'Shipping Methods'
+  route_name: stripe_connect_marketplace.vendor_store_shipping_methods
+  menu_name: vendor_menu
+  parent: stripe_connect_marketplace.vendor_store_settings_link
+  weight: 3
+  route_parameters:
+    store_id: '1'  # This will be replaced dynamically
+
+stripe_connect_marketplace.vendor_store_inventory_link:
+  title: 'Inventory Settings'
+  route_name: stripe_connect_marketplace.vendor_store_inventory
+  menu_name: vendor_menu
+  parent: stripe_connect_marketplace.vendor_store_settings_link
+  weight: 4
+  route_parameters:
+    store_id: '1'  # This will be replaced dynamically

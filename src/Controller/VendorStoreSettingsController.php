@@ -125,12 +125,30 @@ class VendorStoreSettingsController extends ControllerBase {
       '#store' => $store,
       '#settings' => $settings_cards,
       '#attached' => [
-        'library' => ['stripe_connect_marketplace/vendor_store_settings'],
+        'library' => [
+          'stripe_connect_marketplace/vendor_store_settings',
+          'stripe_connect_marketplace/vendor_commerce_dashboard', // Add the React component library
+        ],
+        'drupalSettings' => [
+          'stripeConnectMarketplace' => [
+            'storeId' => $store_id,
+            'storeName' => $store->label(),
+          ],
+        ],
       ],
     ];
     
-    return $build;
-  }
+    // Add a container for the React application to mount
+    $build['commerce_dashboard'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'vendor-commerce-dashboard-app',
+        'class' => ['vendor-commerce-dashboard-container'],
+      ],
+    ];
+  
+  return $build;
+}
 
   /**
    * Gets the description for a setting type.
@@ -284,248 +302,247 @@ class VendorStoreSettingsController extends ControllerBase {
     
     return $build;
   }
-}
 
-<?php
 
-/**
- * Handles tax settings page for a specific vendor store.
- *
- * @param int $store_id
- *   The store ID.
- *
- * @return array
- *   A render array for the tax settings page.
- */
-public function taxSettings($store_id) {
-  // Load the store
-  $store = $this->entityTypeManager->getStorage('commerce_store')->load($store_id);
-  
-  // Check access
-  if (!$store || $store->getOwnerId() != $this->currentUser->id() ||
-      !$this->vendorStoreSettingsAccess->hasStoreSettingAccess($store, 'tax')->isAllowed()) {
-    return $this->redirect('entity.commerce_store.collection');
-  }
-  
-  // Get tax types available for this store
-  $tax_types = $this->storeConfiguration->getStoreTaxTypes($store);
-  
-  // Build the table
-  $rows = [];
-  foreach ($tax_types as $tax_type) {
-    $rows[] = [
-      'name' => $tax_type->label(),
-      'plugin' => $tax_type->getPluginLabel(),
-      'status' => $tax_type->status() ? $this->t('Enabled') : $this->t('Disabled'),
-      'territories' => $this->formatTerritories($tax_type),
-    ];
-  }
-  
-  $build = [
-    '#type' => 'container',
-    '#attributes' => ['class' => ['vendor-tax-settings']],
-    'title' => [
-      '#type' => 'html_tag',
-      '#tag' => 'h1',
-      '#value' => $this->t('Tax Settings for @store', ['@store' => $store->label()]),
-    ],
-    'description' => [
-      '#type' => 'html_tag',
-      '#tag' => 'p',
-      '#value' => $this->t('The following tax configurations apply to your store. Contact the marketplace administrator to configure additional tax types.'),
-    ],
-    'table' => [
-      '#type' => 'table',
-      '#header' => [
-        $this->t('Name'),
-        $this->t('Type'),
-        $this->t('Status'),
-        $this->t('Territories'),
-      ],
-      '#rows' => $rows,
-      '#empty' => $this->t('No tax configurations available.'),
-    ],
-    'back' => [
-      '#type' => 'link',
-      '#title' => $this->t('Back to Store Settings'),
-      '#url' => Url::fromRoute('stripe_connect_marketplace.vendor_store_settings', ['store_id' => $store_id]),
-      '#attributes' => ['class' => ['button']],
-    ],
-  ];
-  
-  return $build;
-}
-
-/**
- * Formats territories for display.
- *
- * @param \Drupal\commerce_tax\Entity\TaxType $tax_type
- *   The tax type.
- *
- * @return string
- *   A formatted string of territories.
- */
-protected function formatTerritories($tax_type) {
-  $plugin = $tax_type->getPlugin();
-  $territories = [];
-  
-  // Check if the plugin has a method to get territories
-  if (method_exists($plugin, 'getTerritories')) {
-    $territories = $plugin->getTerritories();
-  }
-  
-  if (empty($territories)) {
-    return $this->t('All territories');
-  }
-  
-  return implode(', ', $territories);
-}
-
-/**
- * Handles shipping methods page for a specific vendor store.
- *
- * @param int $store_id
- *   The store ID.
- *
- * @return array
- *   A render array for the shipping methods page.
- */
-public function shippingMethods($store_id) {
-  // Load the store
-  $store = $this->entityTypeManager->getStorage('commerce_store')->load($store_id);
-  
-  // Check access
-  if (!$store || $store->getOwnerId() != $this->currentUser->id() ||
-      !$this->vendorStoreSettingsAccess->hasStoreSettingAccess($store, 'shipping')->isAllowed()) {
-    return $this->redirect('entity.commerce_store.collection');
-  }
-  
-  // Load shipping methods for this store
-  $shipping_methods = $this->storeConfiguration->getStoreShippingMethods($store);
-  
-  // Build the table
-  $rows = [];
-  foreach ($shipping_methods as $method) {
-    $rows[] = [
-      'name' => $method->label(),
-      'plugin' => $method->getPlugin()->getLabel(),
-      'status' => $method->isEnabled() ? $this->t('Enabled') : $this->t('Disabled'),
-      'stores' => count($method->getStores()),
-    ];
-  }
-  
-  $build = [
-    '#type' => 'container',
-    '#attributes' => ['class' => ['vendor-shipping-methods']],
-    'title' => [
-      '#type' => 'html_tag',
-      '#tag' => 'h1',
-      '#value' => $this->t('Shipping Methods for @store', ['@store' => $store->label()]),
-    ],
-    'description' => [
-      '#type' => 'html_tag',
-      '#tag' => 'p',
-      '#value' => $this->t('The following shipping methods are available for your store. Contact the marketplace administrator to configure additional shipping methods.'),
-    ],
-    'table' => [
-      '#type' => 'table',
-      '#header' => [
-        $this->t('Name'),
-        $this->t('Type'),
-        $this->t('Status'),
-        $this->t('Store Count'),
-      ],
-      '#rows' => $rows,
-      '#empty' => $this->t('No shipping methods available.'),
-    ],
-    'back' => [
-      '#type' => 'link',
-      '#title' => $this->t('Back to Store Settings'),
-      '#url' => Url::fromRoute('stripe_connect_marketplace.vendor_store_settings', ['store_id' => $store_id]),
-      '#attributes' => ['class' => ['button']],
-    ],
-  ];
-  
-  return $build;
-}
-
-/**
- * Handles inventory settings page for a specific vendor store.
- *
- * @param int $store_id
- *   The store ID.
- *
- * @return array
- *   A render array for the inventory settings page.
- */
-public function inventorySettings($store_id) {
-  // Load the store
-  $store = $this->entityTypeManager->getStorage('commerce_store')->load($store_id);
-  
-  // Check access
-  if (!$store || $store->getOwnerId() != $this->currentUser->id() ||
-      !$this->vendorStoreSettingsAccess->hasStoreSettingAccess($store, 'inventory')->isAllowed()) {
-    return $this->redirect('entity.commerce_store.collection');
-  }
-  
-  // Load inventory settings
-  $inventory_settings = $this->storeConfiguration->getStoreInventorySettings($store);
-  
-  // Get available inventory field types
-  $availability_strategies = [];
-  if (\Drupal::moduleHandler()->moduleExists('commerce_inventory')) {
-    // If commerce_inventory module exists, get strategies from config
-    $config = \Drupal::config('commerce_inventory.settings');
-    $availability_strategies = $config->get('availability_strategies') ?: [
-      'always' => $this->t('Always available'),
-      'simple_stock' => $this->t('Simple stock tracking'),
-    ];
-  } else {
-    // Default fallback options
-    $availability_strategies = [
-      'always' => $this->t('Always available'),
-      'simple_stock' => $this->t('Simple stock tracking'),
-    ];
-  }
-  
-  // Build the form (read-only for vendors)
-  $build = [
-    '#type' => 'container',
-    '#attributes' => ['class' => ['vendor-inventory-settings']],
-    'title' => [
-      '#type' => 'html_tag',
-      '#tag' => 'h1',
-      '#value' => $this->t('Inventory Settings for @store', ['@store' => $store->label()]),
-    ],
-    'description' => [
-      '#type' => 'html_tag',
-      '#tag' => 'p',
-      '#value' => $this->t('These are the inventory settings for your store. Contact the marketplace administrator to modify these settings.'),
-    ],
-    'settings' => [
+  /**
+   * Handles tax settings page for a specific vendor store.
+   *
+   * @param int $store_id
+   *   The store ID.
+   *
+   * @return array
+   *   A render array for the tax settings page.
+   */
+  public function taxSettings($store_id) {
+    // Load the store
+    $store = $this->entityTypeManager->getStorage('commerce_store')->load($store_id);
+    
+    // Check access
+    if (!$store || $store->getOwnerId() != $this->currentUser->id() ||
+        !$this->vendorStoreSettingsAccess->hasStoreSettingAccess($store, 'tax')->isAllowed()) {
+      return $this->redirect('entity.commerce_store.collection');
+    }
+    
+    // Get tax types available for this store
+    $tax_types = $this->storeConfiguration->getStoreTaxTypes($store);
+    
+    // Build the table
+    $rows = [];
+    foreach ($tax_types as $tax_type) {
+      $rows[] = [
+        'name' => $tax_type->label(),
+        'plugin' => $tax_type->getPluginLabel(),
+        'status' => $tax_type->status() ? $this->t('Enabled') : $this->t('Disabled'),
+        'territories' => $this->formatTerritories($tax_type),
+      ];
+    }
+    
+    $build = [
       '#type' => 'container',
-      'enabled' => [
-        '#type' => 'item',
-        '#title' => $this->t('Inventory Tracking'),
-        '#markup' => $inventory_settings['enabled'] ? 
-          $this->t('Enabled') : 
-          $this->t('Disabled'),
+      '#attributes' => ['class' => ['vendor-tax-settings']],
+      'title' => [
+        '#type' => 'html_tag',
+        '#tag' => 'h1',
+        '#value' => $this->t('Tax Settings for @store', ['@store' => $store->label()]),
       ],
-      'default_strategy' => [
-        '#type' => 'item',
-        '#title' => $this->t('Default Availability Strategy'),
-        '#markup' => isset($availability_strategies[$inventory_settings['default_availability_strategy']]) ?
-          $availability_strategies[$inventory_settings['default_availability_strategy']] :
-          $inventory_settings['default_availability_strategy'],
+      'description' => [
+        '#type' => 'html_tag',
+        '#tag' => 'p',
+        '#value' => $this->t('The following tax configurations apply to your store. Contact the marketplace administrator to configure additional tax types.'),
       ],
-    ],
-    'back' => [
-      '#type' => 'link',
-      '#title' => $this->t('Back to Store Settings'),
-      '#url' => Url::fromRoute('stripe_connect_marketplace.vendor_store_settings', ['store_id' => $store_id]),
-      '#attributes' => ['class' => ['button']],
-    ],
-  ];
-  
-  return $build;
+      'table' => [
+        '#type' => 'table',
+        '#header' => [
+          $this->t('Name'),
+          $this->t('Type'),
+          $this->t('Status'),
+          $this->t('Territories'),
+        ],
+        '#rows' => $rows,
+        '#empty' => $this->t('No tax configurations available.'),
+      ],
+      'back' => [
+        '#type' => 'link',
+        '#title' => $this->t('Back to Store Settings'),
+        '#url' => Url::fromRoute('stripe_connect_marketplace.vendor_store_settings', ['store_id' => $store_id]),
+        '#attributes' => ['class' => ['button']],
+      ],
+    ];
+    
+    return $build;
+  }
+
+  /**
+   * Formats territories for display.
+   *
+   * @param \Drupal\commerce_tax\Entity\TaxType $tax_type
+   *   The tax type.
+   *
+   * @return string
+   *   A formatted string of territories.
+   */
+  protected function formatTerritories($tax_type) {
+    $plugin = $tax_type->getPlugin();
+    $territories = [];
+    
+    // Check if the plugin has a method to get territories
+    if (method_exists($plugin, 'getTerritories')) {
+      $territories = $plugin->getTerritories();
+    }
+    
+    if (empty($territories)) {
+      return $this->t('All territories');
+    }
+    
+    return implode(', ', $territories);
+  }
+
+  /**
+   * Handles shipping methods page for a specific vendor store.
+   *
+   * @param int $store_id
+   *   The store ID.
+   *
+   * @return array
+   *   A render array for the shipping methods page.
+   */
+  public function shippingMethods($store_id) {
+    // Load the store
+    $store = $this->entityTypeManager->getStorage('commerce_store')->load($store_id);
+    
+    // Check access
+    if (!$store || $store->getOwnerId() != $this->currentUser->id() ||
+        !$this->vendorStoreSettingsAccess->hasStoreSettingAccess($store, 'shipping')->isAllowed()) {
+      return $this->redirect('entity.commerce_store.collection');
+    }
+    
+    // Load shipping methods for this store
+    $shipping_methods = $this->storeConfiguration->getStoreShippingMethods($store);
+    
+    // Build the table
+    $rows = [];
+    foreach ($shipping_methods as $method) {
+      $rows[] = [
+        'name' => $method->label(),
+        'plugin' => $method->getPlugin()->getLabel(),
+        'status' => $method->isEnabled() ? $this->t('Enabled') : $this->t('Disabled'),
+        'stores' => count($method->getStores()),
+      ];
+    }
+    
+    $build = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['vendor-shipping-methods']],
+      'title' => [
+        '#type' => 'html_tag',
+        '#tag' => 'h1',
+        '#value' => $this->t('Shipping Methods for @store', ['@store' => $store->label()]),
+      ],
+      'description' => [
+        '#type' => 'html_tag',
+        '#tag' => 'p',
+        '#value' => $this->t('The following shipping methods are available for your store. Contact the marketplace administrator to configure additional shipping methods.'),
+      ],
+      'table' => [
+        '#type' => 'table',
+        '#header' => [
+          $this->t('Name'),
+          $this->t('Type'),
+          $this->t('Status'),
+          $this->t('Store Count'),
+        ],
+        '#rows' => $rows,
+        '#empty' => $this->t('No shipping methods available.'),
+      ],
+      'back' => [
+        '#type' => 'link',
+        '#title' => $this->t('Back to Store Settings'),
+        '#url' => Url::fromRoute('stripe_connect_marketplace.vendor_store_settings', ['store_id' => $store_id]),
+        '#attributes' => ['class' => ['button']],
+      ],
+    ];
+    
+    return $build;
+  }
+
+  /**
+   * Handles inventory settings page for a specific vendor store.
+   *
+   * @param int $store_id
+   *   The store ID.
+   *
+   * @return array
+   *   A render array for the inventory settings page.
+   */
+  public function inventorySettings($store_id) {
+    // Load the store
+    $store = $this->entityTypeManager->getStorage('commerce_store')->load($store_id);
+    
+    // Check access
+    if (!$store || $store->getOwnerId() != $this->currentUser->id() ||
+        !$this->vendorStoreSettingsAccess->hasStoreSettingAccess($store, 'inventory')->isAllowed()) {
+      return $this->redirect('entity.commerce_store.collection');
+    }
+    
+    // Load inventory settings
+    $inventory_settings = $this->storeConfiguration->getStoreInventorySettings($store);
+    
+    // Get available inventory field types
+    $availability_strategies = [];
+    if (\Drupal::moduleHandler()->moduleExists('commerce_inventory')) {
+      // If commerce_inventory module exists, get strategies from config
+      $config = \Drupal::config('commerce_inventory.settings');
+      $availability_strategies = $config->get('availability_strategies') ?: [
+        'always' => $this->t('Always available'),
+        'simple_stock' => $this->t('Simple stock tracking'),
+      ];
+    } else {
+      // Default fallback options
+      $availability_strategies = [
+        'always' => $this->t('Always available'),
+        'simple_stock' => $this->t('Simple stock tracking'),
+      ];
+    }
+    
+    // Build the form (read-only for vendors)
+    $build = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['vendor-inventory-settings']],
+      'title' => [
+        '#type' => 'html_tag',
+        '#tag' => 'h1',
+        '#value' => $this->t('Inventory Settings for @store', ['@store' => $store->label()]),
+      ],
+      'description' => [
+        '#type' => 'html_tag',
+        '#tag' => 'p',
+        '#value' => $this->t('These are the inventory settings for your store. Contact the marketplace administrator to modify these settings.'),
+      ],
+      'settings' => [
+        '#type' => 'container',
+        'enabled' => [
+          '#type' => 'item',
+          '#title' => $this->t('Inventory Tracking'),
+          '#markup' => $inventory_settings['enabled'] ? 
+            $this->t('Enabled') : 
+            $this->t('Disabled'),
+        ],
+        'default_strategy' => [
+          '#type' => 'item',
+          '#title' => $this->t('Default Availability Strategy'),
+          '#markup' => isset($availability_strategies[$inventory_settings['default_availability_strategy']]) ?
+            $availability_strategies[$inventory_settings['default_availability_strategy']] :
+            $inventory_settings['default_availability_strategy'],
+        ],
+      ],
+      'back' => [
+        '#type' => 'link',
+        '#title' => $this->t('Back to Store Settings'),
+        '#url' => Url::fromRoute('stripe_connect_marketplace.vendor_store_settings', ['store_id' => $store_id]),
+        '#attributes' => ['class' => ['button']],
+      ],
+    ];
+    
+    return $build;
+  }
 }
