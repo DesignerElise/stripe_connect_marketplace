@@ -2,12 +2,12 @@
 
 namespace Drupal\stripe_connect_marketplace;
 
+use Drupal\Core\Access\AccessResult;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_product\Entity\ProductInterface;
 use Drupal\commerce_store\Entity\StoreInterface;
-use Drupal\Core\Access\AccessResult;
 
 /**
  * Provides access control methods for vendor entities.

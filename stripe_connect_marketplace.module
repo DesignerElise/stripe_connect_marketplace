@@ -817,6 +817,28 @@ function stripe_connect_marketplace_mail($key, &$message, $params) {
 }
 
 /**
+ * Implements hook_entity_type_alter().
+ * 
+ * Alters entity types to use custom access control handlers for vendors.
+ * 
+ * @param array $entity_types
+ *   The entity type definitions array.
+ */
+function stripe_connect_marketplace_entity_type_alter(array &$entity_types) {
+  if (isset($entity_types['commerce_store'])) {
+    $entity_types['commerce_store']->setHandlerClass('access', 'Drupal\stripe_connect_marketplace\Access\VendorStoreAccessControlHandler');
+  }
+  
+  if (isset($entity_types['commerce_product'])) {
+    $entity_types['commerce_product']->setHandlerClass('access', 'Drupal\stripe_connect_marketplace\Access\VendorProductAccessControlHandler');
+  }
+  
+  if (isset($entity_types['commerce_order'])) {
+    $entity_types['commerce_order']->setHandlerClass('access', 'Drupal\stripe_connect_marketplace\Access\VendorOrderAccessControlHandler');
+  }
+}
+
+/**
  * Safe logging helper function for hooks and other non-class code.
  * 
  * @param string $message

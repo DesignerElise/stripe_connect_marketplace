@@ -60,24 +60,64 @@ class CommerceSettingsSubscriber implements EventSubscriberInterface {
    * @var array
    */
   protected $vendorRestrictedRoutes = [
+    // Store-related routes
+    'entity.commerce_store.collection',
+    'entity.commerce_store.add_form',
+    'entity.commerce_store.edit_form',
+    'entity.commerce_store.delete_form',
+    'entity.commerce_store_type.collection',
+    'entity.commerce_store_type.add_form',
+    'entity.commerce_store_type.edit_form',
+    
+    // Product-related routes
+    'entity.commerce_product.collection',
+    'entity.commerce_product_type.collection',
+    'entity.commerce_product_type.add_form',
+    'entity.commerce_product_type.edit_form',
+    
+    // Order-related routes
+    'entity.commerce_order.collection',
+    'entity.commerce_order_type.collection',
+    'entity.commerce_order_type.add_form',
+    'entity.commerce_order_type.edit_form',
+    'commerce_order.configuration',
+    'commerce_order.settings',
+    
+    // Checkout-related routes
+    'entity.commerce_checkout_flow.collection',
+    'entity.commerce_checkout_flow.add_form',
+    'entity.commerce_checkout_flow.edit_form',
+    
+    // Payment-related routes
     'entity.commerce_payment_gateway.collection',
     'entity.commerce_payment_gateway.add_form',
     'entity.commerce_payment_gateway.edit_form',
+    'entity.commerce_payment_method_type.collection',
+    
+    // Tax-related routes
     'entity.commerce_tax_type.collection',
     'entity.commerce_tax_type.add_form',
     'entity.commerce_tax_type.edit_form',
+    
+    // Shipping-related routes
     'entity.commerce_shipping_method.collection',
     'entity.commerce_shipping_method.add_form',
     'entity.commerce_shipping_method.edit_form',
+    'entity.commerce_shipping_method_type.collection',
+    
+    // Inventory-related routes
     'commerce_inventory.settings',
     'entity.commerce_product_variation_type.edit_form',
+    
+    // Promotion-related routes
     'entity.commerce_promotion.collection',
     'entity.commerce_promotion.add_form',
     'entity.commerce_promotion.edit_form',
-    // Add other Commerce admin routes that vendors shouldn't access directly
+    'entity.commerce_promotion_coupon.generate_form',
+    
+    // Generic Commerce admin routes
     'commerce.configuration',
     'commerce.store_settings',
-    'entity.commerce_store_type.collection',
   ];
 
   /**
@@ -112,6 +152,7 @@ class CommerceSettingsSubscriber implements EventSubscriberInterface {
    * {@inheritdoc}
    */
   public static function getSubscribedEvents() {
+    // Higher priority to run before Drupal's access checks
     $events[KernelEvents::REQUEST][] = ['onRequest', 50];
     return $events;
   }
@@ -131,8 +172,10 @@ class CommerceSettingsSubscriber implements EventSubscriberInterface {
       return;
     }
     
-    // Only process for vendors
-    if (!$this->currentUser->hasRole('vendor') || $this->currentUser->hasPermission('administer commerce_store')) {
+    // Only process for vendors without admin permissions
+    if (!$this->currentUser->hasRole('vendor') || 
+        $this->currentUser->hasPermission('administer commerce_store') || 
+        $this->currentUser->hasPermission('access commerce administration pages')) {
       return;
     }
     
@@ -159,9 +202,9 @@ class CommerceSettingsSubscriber implements EventSubscriberInterface {
     $store_id = $this->getVendorStoreId();
     
     // Determine which settings page to redirect to based on current route
-    $redirect_route = 'stripe_connect_marketplace.vendor_dashboard'; // Default fallback
+    $redirect_route = Constants::ROUTE_VENDOR_DASHBOARD;
     
-    if ($store_id) {
+    if ($account->hasPermission(Constants::PERM_ADMINISTER_STORE)) {
       // Determine specific redirect based on the current route
       $specific_route = $this->getVendorRedirectRoute($route_name);
       if ($specific_route) {
@@ -179,7 +222,7 @@ class CommerceSettingsSubscriber implements EventSubscriberInterface {
         $this->messenger->addStatus(t('You have been redirected to your store-specific settings.'));
         
         // Redirect to the store-specific page
-        $url = Url::fromRoute($redirect_route, ['store_id' => $store_id])->toString();
+        $url = Url::fromRoute($redirect_route, ['commerce_store' => $store_id])->toString();
         $event->setResponse(new RedirectResponse($url));
         return;
       }
@@ -200,33 +243,42 @@ class CommerceSettingsSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Gets the vendor's store ID.
+   * Gets the vendor's store ID with static caching.
    *
    * @return int|null
    *   The store ID, or NULL if none found.
    */
   protected function getVendorStoreId() {
-    try {
-      // Query for stores owned by the current user
-      $query = $this->entityTypeManager->getStorage('commerce_store')->getQuery()
-        ->condition('uid', $this->currentUser->id())
-        ->accessCheck(TRUE)
-        ->sort('created', 'DESC')
-        ->range(0, 1);
-      
-      $result = $query->execute();
-      
-      if (!empty($result)) {
-        return reset($result);
+    // Static cache to avoid repeated database queries
+    static $vendor_store_ids = [];
+    
+    $uid = $this->currentUser->id();
+    if (!isset($vendor_store_ids[$uid])) {
+      try {
+        // Query for stores owned by the current user
+        $query = $this->entityTypeManager->getStorage('commerce_store')->getQuery()
+          ->condition('uid', $uid)
+          ->accessCheck(TRUE)
+          ->sort('created', 'DESC')
+          ->range(0, 1);
+        
+        $result = $query->execute();
+        
+        if (!empty($result)) {
+          $vendor_store_ids[$uid] = reset($result);
+        } else {
+          $vendor_store_ids[$uid] = NULL;
+        }
+      }
+      catch (\Exception $e) {
+        $this->logger->error('Error getting vendor store ID: @message', [
+          '@message' => $e->getMessage(),
+        ]);
+        $vendor_store_ids[$uid] = NULL;
       }
     }
-    catch (\Exception $e) {
-      SafeLogging::log($this->logger, 'Error getting vendor store ID: @message', [
-        '@message' => $e->getMessage(),
-      ], 'error');
-    }
     
-    return NULL;
+    return $vendor_store_ids[$uid];
   }
 
   /**
@@ -240,29 +292,40 @@ class CommerceSettingsSubscriber implements EventSubscriberInterface {
    */
   protected function getVendorRedirectRoute($route_name) {
     $route_map = [
-      'entity.commerce_payment_gateway.collection' => 'stripe_connect_marketplace.vendor_store_payment_gateways',
-      'entity.commerce_payment_gateway.add_form' => 'stripe_connect_marketplace.vendor_store_payment_gateways',
-      'entity.commerce_payment_gateway.edit_form' => 'stripe_connect_marketplace.vendor_store_payment_gateways',
+      // Store routes
+      'entity.commerce_store.collection' => Constants::ROUTE_VENDOR_STORE_SETTINGS,
+      'entity.commerce_store.add_form' => Constants::ROUTE_VENDOR_STORE_SETTINGS,
+      'entity.commerce_store.edit_form' => Constants::ROUTE_VENDOR_STORE_SETTINGS,
+      'entity.commerce_store_type.collection' => Constants::ROUTE_VENDOR_STORE_SETTINGS,
       
-      'entity.commerce_tax_type.collection' => 'stripe_connect_marketplace.vendor_store_tax_settings',
-      'entity.commerce_tax_type.add_form' => 'stripe_connect_marketplace.vendor_store_tax_settings',
-      'entity.commerce_tax_type.edit_form' => 'stripe_connect_marketplace.vendor_store_tax_settings',
+      // Payment gateway routes
+      'entity.commerce_payment_gateway.collection' => ROUTE_VENDOR_STORE_PAYMENT,
+      'entity.commerce_payment_gateway.add_form' => ROUTE_VENDOR_STORE_PAYMENT,
+      'entity.commerce_payment_gateway.edit_form' => ROUTE_VENDOR_STORE_PAYMENT,
       
-      'entity.commerce_shipping_method.collection' => 'stripe_connect_marketplace.vendor_store_shipping_methods',
-      'entity.commerce_shipping_method.add_form' => 'stripe_connect_marketplace.vendor_store_shipping_methods',
-      'entity.commerce_shipping_method.edit_form' => 'stripe_connect_marketplace.vendor_store_shipping_methods',
+      // Tax routes
+      'entity.commerce_tax_type.collection' => ROUTE_VENDOR_STORE_TAX_SETTINGS,
+      'entity.commerce_tax_type.add_form' => ROUTE_VENDOR_STORE_TAX_SETTINGS,
+      'entity.commerce_tax_type.edit_form' => ROUTE_VENDOR_STORE_TAX_SETTINGS,
       
-      'commerce_inventory.settings' => 'stripe_connect_marketplace.vendor_store_inventory',
-      'entity.commerce_product_variation_type.edit_form' => 'stripe_connect_marketplace.vendor_store_inventory',
+      // Shipping routes
+      'entity.commerce_shipping_method.collection' => ROUTE_VENDOR_STORE_SHIPPING_METHODS,
+      'entity.commerce_shipping_method.add_form' => ROUTE_VENDOR_STORE_SHIPPING_METHODS,
+      'entity.commerce_shipping_method.edit_form' => ROUTE_VENDOR_STORE_SHIPPING_METHODS,
       
-      'entity.commerce_promotion.collection' => 'stripe_connect_marketplace.vendor_store_settings',
-      'entity.commerce_promotion.add_form' => 'stripe_connect_marketplace.vendor_store_settings',
-      'entity.commerce_promotion.edit_form' => 'stripe_connect_marketplace.vendor_store_settings',
+      // Inventory routes
+      'commerce_inventory.settings' => ROUTE_VENDOR_STORE_INVENTORY,
+      'entity.commerce_product_variation_type.edit_form' => ROUTE_VENDOR_STORE_INVENTORY,
+      
+      // Promotion routes
+      'entity.commerce_promotion.collection' => ROUTE_VENDOR_STORE_PROMOTIONS,
+      'entity.commerce_promotion.add_form' => ROUTE_VENDOR_STORE_PROMOTIONS,
+      'entity.commerce_promotion.edit_form' => ROUTE_VENDOR_STORE_PROMOTIONS,
+      'entity.commerce_promotion_coupon.generate_form' => ROUTE_VENDOR_STORE_PROMOTIONS,
       
       // Generic Commerce routes redirect to the store settings dashboard
-      'commerce.configuration' => 'stripe_connect_marketplace.vendor_store_settings',
-      'commerce.store_settings' => 'stripe_connect_marketplace.vendor_store_settings',
-      'entity.commerce_store_type.collection' => 'stripe_connect_marketplace.vendor_store_settings',
+      'commerce.configuration' => Constants::ROUTE_VENDOR_STORE_SETTINGS,
+      'commerce.store_settings' => Constants::ROUTE_VENDOR_STORE_SETTINGS,
     ];
     
     // Return the mapped route if available, otherwise vendor store settings
@@ -273,7 +336,7 @@ class CommerceSettingsSubscriber implements EventSubscriberInterface {
     // For other Commerce admin routes, default to store settings
     if (strpos($route_name, 'commerce.') === 0 || 
         strpos($route_name, 'entity.commerce_') === 0) {
-      return 'stripe_connect_marketplace.vendor_store_settings';
+      return Constants::ROUTE_VENDOR_STORE_SETTINGS;
     }
     
     // No specific mapping found

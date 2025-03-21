@@ -1,3 +1,4 @@
+# Admin permissions
 administer stripe connect:
   title: 'Administer Stripe Connect'
   description: 'Allow users to configure Stripe Connect settings and manage vendors.'
@@ -8,6 +9,118 @@ access stripe connect admin:
   description: 'Allow users to access the Stripe Connect administration pages.'
   restrict access: true
 
+# Store permissions (aligned with Commerce pattern)
+administer commerce_store:
+  title: 'Administer stores'
+  description: 'Maintain stores and their configuration.'
+  restrict access: true
+
+view commerce_store:
+  title: 'View stores'
+  description: 'View stores.'
+
+view own commerce_store:
+  title: 'View own stores'
+  description: 'View stores owned by the user.'
+
+create commerce_store:
+  title: 'Create stores'
+  description: 'Create new stores.'
+  restrict access: true
+
+update commerce_store:
+  title: 'Update any store'
+  description: 'Update any store, regardless of owner.'
+  restrict access: true
+  
+update own commerce_store:
+  title: 'Update own stores'
+  description: 'Update stores owned by the user.'
+
+delete commerce_store:
+  title: 'Delete any store'
+  description: 'Delete any store, regardless of owner.'
+  restrict access: true
+  
+delete own commerce_store:
+  title: 'Delete own stores'
+  description: 'Delete stores owned by the user.'
+
+# Product permissions (aligned with Commerce pattern)
+administer commerce_product:
+  title: 'Administer products'
+  description: 'Maintain products and their configuration.'
+  restrict access: true
+
+administer commerce_product_type:
+  title: 'Administer product types'
+  description: 'Maintain the types of products available and the fields associated with those types.'
+  restrict access: true
+
+view commerce_product:
+  title: 'View products'
+  description: 'View products.'
+
+view own commerce_product:
+  title: 'View own products'
+  description: 'View products in stores owned by the user.'
+
+create commerce_product:
+  title: 'Create products'
+  description: 'Create new products.'
+
+update commerce_product:
+  title: 'Update any product'
+  description: 'Update any product, regardless of owner.'
+  restrict access: true
+  
+update own commerce_product:
+  title: 'Update own products'
+  description: 'Update products in stores owned by the user.'
+
+delete commerce_product:
+  title: 'Delete any product'
+  description: 'Delete any product, regardless of owner.'
+  restrict access: true
+  
+delete own commerce_product:
+  title: 'Delete own products'
+  description: 'Delete products in stores owned by the user.'
+
+# Order permissions (aligned with Commerce pattern)
+administer commerce_order:
+  title: 'Administer orders'
+  description: 'Maintain orders and their configuration.'
+  restrict access: true
+
+view commerce_order:
+  title: 'View orders'
+  description: 'View orders.'
+
+view own commerce_order:
+  title: 'View own orders'
+  description: 'View orders placed with stores owned by the user.'
+
+create commerce_order:
+  title: 'Create orders'
+  description: 'Create new orders.'
+  restrict access: true
+
+update commerce_order:
+  title: 'Update any order'
+  description: 'Update any order, regardless of owner.'
+  restrict access: true
+  
+update own commerce_order:
+  title: 'Update own orders'
+  description: 'Update orders placed with stores owned by the user.'
+
+delete commerce_order:
+  title: 'Delete any order'
+  description: 'Delete any order, regardless of owner.'
+  restrict access: true
+
+# Vendor-specific permissions
 view stripe connect dashboard:
   title: 'View Stripe Connect dashboard'
   description: 'Allow vendors to view their Stripe Connect dashboard.'
@@ -32,100 +145,59 @@ view own vendor profile:
   title: 'View own vendor profile'
   description: 'Allow vendors to view and edit their own vendor profile.'
 
-view own commerce_store:
-  title: 'View own stores'
-  description: 'View stores owned by the user.'
-  restrict access: true
-
-create commerce_store:
-  title: 'Create stores'
-  description: 'Create new stores.'
-  restrict access: true
-
-update own commerce_store:
-  title: 'Update own stores'
-  description: 'Update stores owned by the user.'
-  restrict access: true
-
-delete own commerce_store:
-  title: 'Delete own stores'
-  description: 'Delete stores owned by the user.'
-  restrict access: true
-
-view own commerce_product:
-  title: 'View own products'
-  description: 'View products in stores owned by the user.'
-  restrict access: true
-
-create commerce_product:
-  title: 'Create products'
-  description: 'Create new products.'
-  restrict access: true
-
-update own commerce_product:
-  title: 'Update own products'
-  description: 'Update products in stores owned by the user.'
-  restrict access: true
-
-delete own commerce_product:
-  title: 'Delete own products'
-  description: 'Delete products in stores owned by the user.'
-  restrict access: true
-
-view own commerce_order:
-  title: 'View own orders'
-  description: 'View orders placed with stores owned by the user.'
-  restrict access: true
-
-update own commerce_order:
-  title: 'Update own orders'
-  description: 'Update orders placed with stores owned by the user.'
-  restrict access: true
-
+# Store settings permissions
 manage own store settings:
   title: 'Manage own store settings'
   description: 'Allow vendors to manage general settings for their own stores.'
-  restrict access: true
 
 manage own store payment gateways:
   title: 'Manage payment gateway settings for own store'
   description: 'Allow vendors to view and manage payment gateway settings for their own stores.'
-  restrict access: true
 
 manage own store tax settings:
   title: 'Manage tax settings for own store'
   description: 'Allow vendors to view and manage tax settings for their own stores.'
-  restrict access: true
 
 manage own store shipping methods:
   title: 'Manage shipping methods for own store'
   description: 'Allow vendors to view and manage shipping methods for their own stores.'
-  restrict access: true
 
 manage own store inventory settings:
   title: 'Manage inventory settings for own store'
   description: 'Allow vendors to view and manage inventory settings for their own stores.'
-  restrict access: true
 
+# Product management permissions for vendors
 adjust own product prices:
   title: 'Adjust prices for own products'
   description: 'Allow vendors to adjust prices for their own products.'
-  restrict access: true
 
 manage own product promotions:
   title: 'Manage promotions for own products'
   description: 'Allow vendors to create and manage promotions for their own products.'
+
+# Commerce access permissions
+access commerce administration pages:
+  title: 'Access commerce administration pages'
+  description: 'Access the commerce administration pages.'
   restrict access: true
 
-access vendor commerce reports:
-  title: 'Access commerce reports for own store'
-  description: 'Allow vendors to access commerce reports related to their own store.'
-  restrict access: true
+access checkout:
+  title: 'Access checkout'
+  description: 'Complete a purchase through the checkout form.'
 
 view vendor commerce dashboard:
   title: 'View vendor commerce dashboard'
   description: 'Allow vendors to view their commerce dashboard.'
 
-manage vendor commerce configuration:
-  title: 'Manage vendor commerce configuration'
-  description: 'Allow vendors to access their commerce configuration.'
+access vendor commerce reports:
+  title: 'Access commerce reports for own store'
+  description: 'Allow vendors to access commerce reports related to their own store.'
+
+# Special operations permissions (aligned with Commerce)
+reassign commerce_order:
+  title: 'Reassign orders'
+  description: 'Reassign orders from one customer to another.'
+
+unlock orders:
+  title: 'Unlock orders'
+  description: 'Unlock orders.'

@@ -1,22 +1,5 @@
 services:
-  stripe_connect_marketplace.account_verification:
-    class: Drupal\stripe_connect_marketplace\Service\AccountVerificationService
-    arguments:
-      - '@entity_type.manager'
-      - '@logger.factory'
-      - '@state'
-      - '@stripe_connect_marketplace.api'
-      
-  stripe_connect_marketplace.account_deletion_subscriber:
-    class: Drupal\stripe_connect_marketplace\EventSubscriber\AccountDeletionSubscriber
-    arguments:
-      - '@entity_type.manager'
-      - '@logger.factory'
-      - '@messenger'
-      - '@stripe_connect_marketplace.account_verification'
-    tags:
-      - { name: event_subscriber }
-      
+  # Core services
   stripe_connect_marketplace.api:
     class: Drupal\stripe_connect_marketplace\StripeApiService
     arguments:
@@ -32,25 +15,15 @@ services:
       - '@logger.factory'
       - '@plugin.manager.mail'
       - '@entity_type.manager'
-
-  stripe_connect_marketplace.commerce_settings_subscriber:
-    class: Drupal\stripe_connect_marketplace\EventSubscriber\CommerceSettingsSubscriber
+      
+  stripe_connect_marketplace.account_verification:
+    class: Drupal\stripe_connect_marketplace\Service\AccountVerificationService
     arguments:
       - '@entity_type.manager'
-      - '@current_user'
-      - '@current_route_match'
-      - '@messenger'
       - '@logger.factory'
-    tags:
-      - { name: event_subscriber }
-  
-  stripe_connect_marketplace.failed_operations:
-    class: Drupal\stripe_connect_marketplace\Service\FailedOperationsService
-    arguments:
-      - '@queue'
       - '@state'
-      - '@logger.factory'
-      
+      - '@stripe_connect_marketplace.api'
+  
   stripe_connect_marketplace.payment_service:
     class: Drupal\stripe_connect_marketplace\Service\PaymentService
     arguments:
@@ -67,31 +40,76 @@ services:
       - '@entity_type.manager'
       - '@state'
       - '@stripe_connect_marketplace.api'
-
+      
+  stripe_connect_marketplace.failed_operations:
+    class: Drupal\stripe_connect_marketplace\Service\FailedOperationsService
+    arguments:
+      - '@queue'
+      - '@state'
+      - '@logger.factory'
+      
   stripe_connect_marketplace.store_configuration:
     class: Drupal\stripe_connect_marketplace\Service\StoreConfigurationService
     arguments:
       - '@entity_type.manager'
       - '@config.factory'
       - '@logger.factory'
-  
+
+  # Access services
   stripe_connect_marketplace.vendor_access:
     class: Drupal\stripe_connect_marketplace\VendorAccessService
     arguments:
       - '@entity_type.manager'
       - '@current_user'
 
+  # Access check services with proper tagging
   stripe_connect_marketplace.vendor_store_access:
     class: Drupal\stripe_connect_marketplace\Access\VendorStoreAccess
     arguments:
       - '@entity_type.manager'
       - '@request_stack'
+      - '@current_route_match'
     tags:
       - { name: access_check, applies_to: _vendor_store_access }
-      - { name: access_check, applies_to: _vendor_store_dashboard_access }
+      - { name: access_check, applies_to: _custom_access }
 
-  stripe_connect_marketplace.vendor_store_settings_access:
-    class: Drupal\stripe_connect_marketplace\Service\VendorStoreSettingsAccessService
+  # Entity access handler service registrations
+  stripe_connect_marketplace.commerce_store.access_control_handler:
+    class: Drupal\stripe_connect_marketplace\Access\VendorStoreAccessControlHandler
+    arguments: ['@entity_type.manager']
+    tags:
+      - { name: access_control_handler, entity_type: commerce_store, priority: 10 }
+
+  stripe_connect_marketplace.commerce_product.access_control_handler:
+    class: Drupal\stripe_connect_marketplace\Access\VendorProductAccessControlHandler
+    arguments: ['@entity_type.manager']
+    tags:
+      - { name: access_control_handler, entity_type: commerce_product, priority: 10 }
+
+  stripe_connect_marketplace.commerce_order.access_control_handler:
+    class: Drupal\stripe_connect_marketplace\Access\VendorOrderAccessControlHandler
+    arguments: ['@entity_type.manager']
+    tags:
+      - { name: access_control_handler, entity_type: commerce_order, priority: 10 }
+
+  # Event subscribers
+  stripe_connect_marketplace.commerce_settings_subscriber:
+    class: Drupal\stripe_connect_marketplace\EventSubscriber\CommerceSettingsSubscriber
     arguments:
       - '@entity_type.manager'
       - '@current_user'
+      - '@current_route_match'
+      - '@messenger'
+      - '@logger.factory'
+    tags:
+      - { name: event_subscriber }
+  
+  stripe_connect_marketplace.account_deletion_subscriber:
+    class: Drupal\stripe_connect_marketplace\EventSubscriber\AccountDeletionSubscriber
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@messenger'
+      - '@stripe_connect_marketplace.account_verification'
+    tags:
+      - { name: event_subscriber }

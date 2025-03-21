@@ -1,3 +1,4 @@
+# Admin routes
 stripe_connect_marketplace.admin_dashboard:
   path: '/admin/commerce/stripe-connect/dashboard'
   defaults:
@@ -5,6 +6,16 @@ stripe_connect_marketplace.admin_dashboard:
     _title: 'Stripe Connect Dashboard'
   requirements:
     _permission: 'access stripe connect admin'
+  options:
+    _admin_route: TRUE
+
+stripe_connect_marketplace.settings:
+  path: '/admin/commerce/config/stripe-connect'
+  defaults:
+    _form: '\Drupal\stripe_connect_marketplace\Form\StripeConnectSettingsForm'
+    _title: 'Stripe Connect Settings'
+  requirements:
+    _permission: 'administer stripe connect'
   options:
     _admin_route: TRUE
 
@@ -18,129 +29,9 @@ stripe_connect_marketplace.make_vendor:
     user: \d+
   options:
     _admin_route: TRUE
-
-stripe_connect_marketplace.onboard_vendor:
-  path: '/vendor/onboard'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::onboardVendor'
-    _title: 'Become a Vendor'
-  requirements:
-    _permission: 'access content'
-
-stripe_connect_marketplace.onboard_complete:
-  path: '/vendor/onboard/complete'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::onboardingComplete'
-    _title: 'Onboarding Complete'
-  requirements:
-    _permission: 'access content'
-    
-stripe_connect_marketplace.settings:
-  path: '/admin/commerce/config/stripe-connect'
-  defaults:
-    _form: '\Drupal\stripe_connect_marketplace\Form\StripeConnectSettingsForm'
-    _title: 'Stripe Connect Settings'
-  requirements:
-    _permission: 'administer stripe connect'
-  options:
-    _admin_route: TRUE
-    
-stripe_connect_marketplace.vendor_dashboard:
-  path: '/vendor/dashboard'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::vendorDashboard'
-    _title: 'Vendor Dashboard'
-  requirements:
-    _permission: 'view stripe connect dashboard'
-
-stripe_connect_marketplace.stripe_dashboard_redirect:
-  path: '/vendor/stripe-dashboard'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::stripeDashboardRedirect'
-    _title: 'Stripe Dashboard'
-  requirements:
-    _permission: 'view stripe connect dashboard'
-    
-stripe_connect_marketplace.vendor_form:
-  path: '/vendor/register'
-  defaults:
-    _form: '\Drupal\stripe_connect_marketplace\Form\OnboardVendorForm'
-    _title: 'Register as Vendor'
-  requirements:
-    _permission: 'register as stripe connect vendor'
-
-stripe_connect_marketplace.vendor_store_settings:
-  path: '/vendor/store/{store_id}/settings'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::settingsDashboard'
-    _title: 'Store Settings'
-  requirements:
-    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
-    store_id: \d+
-  options:
     parameters:
-      store_id:
-        type: entity:commerce_store
-
-stripe_connect_marketplace.vendor_store_payment_gateways:
-  path: '/vendor/store/{store_id}/payment-gateways'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::paymentGateways'
-    _title: 'Payment Gateways'
-  requirements:
-    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
-    store_id: \d+
-  options:
-    parameters:
-      store_id:
-        type: entity:commerce_store
-
-stripe_connect_marketplace.vendor_store_tax_settings:
-  path: '/vendor/store/{store_id}/tax-settings'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::taxSettings'
-    _title: 'Tax Settings'
-  requirements:
-    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
-    store_id: \d+
-  options:
-    parameters:
-      store_id:
-        type: entity:commerce_store
-
-stripe_connect_marketplace.vendor_store_shipping_methods:
-  path: '/vendor/store/{store_id}/shipping-methods'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::shippingMethods'
-    _title: 'Shipping Methods'
-  requirements:
-    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
-    store_id: \d+
-  options:
-    parameters:
-      store_id:
-        type: entity:commerce_store
-
-stripe_connect_marketplace.vendor_store_inventory:
-  path: '/vendor/store/{store_id}/inventory'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::inventorySettings'
-    _title: 'Inventory Settings'
-  requirements:
-    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
-    store_id: \d+
-  options:
-    parameters:
-      store_id:
-        type: entity:commerce_store
-
-stripe_connect_marketplace.vendor_terms:
-  path: '/vendor/terms'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::vendorTerms'
-    _title: 'Vendor Terms and Conditions'
-  requirements:
-    _permission: 'access content'
+      user:
+        type: entity:user
 
 stripe_connect_marketplace.verify_api_keys:
   path: '/admin/commerce/stripe-connect/verify-api-keys'
@@ -162,6 +53,143 @@ stripe_connect_marketplace.verify_all_accounts:
   options:
     _admin_route: TRUE
 
+# Vendor onboarding routes
+stripe_connect_marketplace.onboard_vendor:
+  path: '/vendor/onboard'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::onboardVendor'
+    _title: 'Become a Vendor'
+  requirements:
+    _permission: 'access content'
+
+stripe_connect_marketplace.onboard_complete:
+  path: '/vendor/onboard/complete'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::onboardingComplete'
+    _title: 'Onboarding Complete'
+  requirements:
+    _permission: 'access content'
+
+stripe_connect_marketplace.vendor_form:
+  path: '/vendor/register'
+  defaults:
+    _form: '\Drupal\stripe_connect_marketplace\Form\OnboardVendorForm'
+    _title: 'Register as Vendor'
+  requirements:
+    _permission: 'register as stripe connect vendor'
+
+stripe_connect_marketplace.vendor_terms:
+  path: '/vendor/terms'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::vendorTerms'
+    _title: 'Vendor Terms and Conditions'
+  requirements:
+    _permission: 'access content'
+
+# Vendor dashboard routes
+stripe_connect_marketplace.vendor_dashboard:
+  path: '/vendor/dashboard'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::vendorDashboard'
+    _title: 'Vendor Dashboard'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorDashboardAccess'
+
+stripe_connect_marketplace.stripe_dashboard_redirect:
+  path: '/vendor/stripe-dashboard'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\ConnectController::stripeDashboardRedirect'
+    _title: 'Stripe Dashboard'
+  requirements:
+    _permission: 'view stripe connect dashboard'
+
+# Vendor store settings routes with unified pattern
+stripe_connect_marketplace.vendor_store_settings:
+  path: '/vendor/store/{commerce_store}/settings'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::settingsDashboard'
+    _title: 'Store Settings'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+  options:
+    parameters:
+      commerce_store:
+        type: entity:commerce_store
+
+stripe_connect_marketplace.vendor_store_payment_gateways:
+  path: '/vendor/store/{commerce_store}/payment-gateways'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::paymentGateways'
+    _title: 'Payment Gateways'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+  options:
+    parameters:
+      commerce_store:
+        type: entity:commerce_store
+
+stripe_connect_marketplace.vendor_store_tax_settings:
+  path: '/vendor/store/{commerce_store}/tax-settings'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::taxSettings'
+    _title: 'Tax Settings'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+  options:
+    parameters:
+      commerce_store:
+        type: entity:commerce_store
+
+stripe_connect_marketplace.vendor_store_shipping_methods:
+  path: '/vendor/store/{commerce_store}/shipping-methods'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::shippingMethods'
+    _title: 'Shipping Methods'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+  options:
+    parameters:
+      commerce_store:
+        type: entity:commerce_store
+
+stripe_connect_marketplace.vendor_store_inventory:
+  path: '/vendor/store/{commerce_store}/inventory'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::inventorySettings'
+    _title: 'Inventory Settings'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+  options:
+    parameters:
+      commerce_store:
+        type: entity:commerce_store
+
+# Product promotion management for vendors
+stripe_connect_marketplace.vendor_store_promotions:
+  path: '/vendor/store/{commerce_store}/promotions'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\VendorStoreSettingsController::promotions'
+    _title: 'Product Promotions'
+  requirements:
+    _custom_access: '\Drupal\stripe_connect_marketplace\Access\VendorStoreAccess::checkVendorStoreAccess'
+    _permission: 'manage own product promotions'
+  options:
+    parameters:
+      commerce_store:
+        type: entity:commerce_store
+
+# Webhook handler
+stripe_connect_marketplace.webhook:
+  path: '/stripe/webhook'
+  defaults:
+    _controller: '\Drupal\stripe_connect_marketplace\Controller\WebhookController::processWebhook'
+    _title: 'Stripe Webhook Processor'
+  requirements:
+    _access: 'TRUE'
+  options:
+    no_cache: TRUEuser:
+        type: entity:user
+
 stripe_connect_marketplace.view_vendor:
   path: '/admin/commerce/stripe-connect/vendor/{user}'
   defaults:
@@ -172,6 +200,9 @@ stripe_connect_marketplace.view_vendor:
     user: \d+
   options:
     _admin_route: TRUE
+    parameters:
+      user:
+        type: entity:user
 
 stripe_connect_marketplace.view_vendor_payouts:
   path: '/admin/commerce/stripe-connect/vendor/{user}/payouts'
@@ -183,13 +214,4 @@ stripe_connect_marketplace.view_vendor_payouts:
     user: \d+
   options:
     _admin_route: TRUE
-
-stripe_connect_marketplace.webhook:
-  path: '/stripe/webhook'
-  defaults:
-    _controller: '\Drupal\stripe_connect_marketplace\Controller\WebhookController::processWebhook'
-    _title: 'Stripe Webhook Processor'
-  requirements:
-    _access: 'TRUE'
-  options:
-    no_cache: TRUE
+    parameters:

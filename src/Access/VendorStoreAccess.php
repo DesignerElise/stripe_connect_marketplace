@@ -3,14 +3,15 @@
 namespace Drupal\stripe_connect_marketplace\Access;
 
 use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Routing\Access\AccessInterface;
 use Drupal\Core\Session\AccountInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Symfony\Component\Routing\Route;
+use Drupal\Core\Routing\RouteMatchInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
- * Provides access control for vendor store-related routes.
+ * Controls access to vendor store settings routes.
  */
 class VendorStoreAccess implements AccessInterface {
 
@@ -22,11 +23,18 @@ class VendorStoreAccess implements AccessInterface {
   protected $entityTypeManager;
 
   /**
-   * The current request.
+   * The current route match.
    *
-   * @var \Symfony\Component\HttpFoundation\Request
+   * @var \Drupal\Core\Routing\RouteMatchInterface
    */
-  protected $currentRequest;
+  protected $routeMatch;
+
+  /**
+   * The request stack.
+   *
+   * @var \Symfony\Component\HttpFoundation\RequestStack
+   */
+  protected $requestStack;
 
   /**
    * Constructs a new VendorStoreAccess object.
@@ -35,107 +43,123 @@ class VendorStoreAccess implements AccessInterface {
    *   The entity type manager.
    * @param \Symfony\Component\HttpFoundation\RequestStack $request_stack
    *   The request stack.
+   * @param \Drupal\Core\Routing\RouteMatchInterface $route_match
+   *   The current route match.
    */
   public function __construct(
     EntityTypeManagerInterface $entity_type_manager,
-    RequestStack $request_stack
+    RequestStack $request_stack,
+    RouteMatchInterface $route_match
   ) {
     $this->entityTypeManager = $entity_type_manager;
-    $this->currentRequest = $request_stack->getCurrentRequest();
+    $this->requestStack = $request_stack;
+    $this->routeMatch = $route_match;
   }
 
   /**
-   * Custom access check for vendor to access store dashboard.
+   * Checks access for vendor store pages.
    *
-   * @param \Symfony\Component\Routing\Route $route
-   *   The route to check access for.
    * @param \Drupal\Core\Session\AccountInterface $account
    *   The currently logged in account.
    *
    * @return \Drupal\Core\Access\AccessResultInterface
    *   The access result.
    */
-  public function checkVendorStoreDashboardAccess(Route $route, AccountInterface $account) {
-    // If user has admin permission, always allow
+  public function checkVendorStoreAccess(AccountInterface $account) {
+    // Admin always has access
     if ($account->hasPermission('administer commerce_store')) {
       return AccessResult::allowed()->cachePerPermissions();
     }
-
-    // For vendors, check if they have access to view own stores
-    if ($account->hasRole('vendor') && $account->hasPermission('view own commerce_store')) {
-      // Explicitly load the account to check if they have any stores
-      $user = $this->entityTypeManager->getStorage('user')->load($account->id());
-      
-      // Count their stores
-      $query = $this->entityTypeManager->getStorage('commerce_store')->getQuery()
-        ->condition('uid', $user->id())
-        ->accessCheck(FALSE);
-      
-      $count = $query->count()->execute();
-      
-      if ($count > 0) {
-        return AccessResult::allowed()
-          ->cachePerUser()
-          ->addCacheableDependency($user);
-      }
-      
-      // They can create a store if they have the permission
-      if ($account->hasPermission('create commerce_store')) {
-        return AccessResult::allowed()->cachePerPermissions();
-      }
+    
+    // Check if user is a vendor
+    if (!$account->hasRole('vendor')) {
+      return AccessResult::forbidden()->cachePerUser();
     }
     
-    return AccessResult::forbidden()->cachePerPermissions();
+    // Get the store ID from the route
+    $store_id = $this->routeMatch->getParameter('store_id');
+    if (!$store_id) {
+      return AccessResult::forbidden();
+    }
+    
+    // Load the store entity
+    try {
+      $store = $this->entityTypeManager->getStorage('commerce_store')->load($store_id);
+      if (!$store) {
+        return AccessResult::forbidden();
+      }
+      
+      // Check if the current user is the owner of the store
+      if ($store->getOwnerId() == $account->id()) {
+        $route_name = $this->routeMatch->getRouteName();
+        
+        // Check for specific permissions based on route
+        switch ($route_name) {
+          case 'stripe_connect_marketplace.vendor_store_payment_gateways':
+            return AccessResult::allowedIfHasPermission($account, 'manage own store payment gateways')
+              ->cachePerPermissions()
+              ->cachePerUser()
+              ->addCacheableDependency($store);
+              
+          case 'stripe_connect_marketplace.vendor_store_tax_settings':
+            return AccessResult::allowedIfHasPermission($account, 'manage own store tax settings')
+              ->cachePerPermissions()
+              ->cachePerUser()
+              ->addCacheableDependency($store);
+              
+          case 'stripe_connect_marketplace.vendor_store_shipping_methods':
+            return AccessResult::allowedIfHasPermission($account, 'manage own store shipping methods')
+              ->cachePerPermissions()
+              ->cachePerUser()
+              ->addCacheableDependency($store);
+              
+          case 'stripe_connect_marketplace.vendor_store_inventory':
+            return AccessResult::allowedIfHasPermission($account, 'manage own store inventory settings')
+              ->cachePerPermissions()
+              ->cachePerUser()
+              ->addCacheableDependency($store);
+              
+          default:
+            // General store settings access
+            return AccessResult::allowedIfHasPermission($account, 'manage own store settings')
+              ->cachePerPermissions()
+              ->cachePerUser()
+              ->addCacheableDependency($store);
+        }
+      }
+      
+      return AccessResult::forbidden()
+        ->cachePerUser()
+        ->addCacheableDependency($store);
+    }
+    catch (\Exception $e) {
+      return AccessResult::forbidden();
+    }
   }
 
   /**
-   * Custom access check for vendor to access specific store.
+   * Special access check for vendor store dashboard.
    *
-   * @param \Symfony\Component\Routing\Route $route
-   *   The route to check access for.
    * @param \Drupal\Core\Session\AccountInterface $account
    *   The currently logged in account.
-   * @param int $commerce_store
-   *   The store ID from the route.
    *
    * @return \Drupal\Core\Access\AccessResultInterface
    *   The access result.
    */
-  public function checkVendorStoreAccess(Route $route, AccountInterface $account, $commerce_store = NULL) {
-    // If user has admin permission, always allow
+  public function checkVendorDashboardAccess(AccountInterface $account) {
+    // Admin always has access
     if ($account->hasPermission('administer commerce_store')) {
       return AccessResult::allowed()->cachePerPermissions();
     }
     
-    // For vendors, check if they own this store
-    if ($account->hasRole('vendor') && $account->hasPermission('view own commerce_store')) {
-      if (empty($commerce_store)) {
-        // If no store ID is specified, use store ID from request if available
-        if ($this->currentRequest->get('commerce_store')) {
-          $commerce_store = $this->currentRequest->get('commerce_store');
-        }
-      }
-      
-      // If we have a store ID, check ownership
-      if (!empty($commerce_store)) {
-        $store = $this->entityTypeManager->getStorage('commerce_store')->load($commerce_store);
-        
-        if ($store && $store->getOwnerId() == $account->id()) {
-          return AccessResult::allowed()
-            ->cachePerUser()
-            ->addCacheableDependency($store);
-        }
-        
-        // This isn't their store
-        return AccessResult::forbidden()
-          ->cachePerUser()
-          ->addCacheableDependency($store);
-      }
-      
-      // Fallback to allowed for collection access
-      return AccessResult::allowed()->cachePerPermissions();
+    // Check if user is a vendor
+    if (!$account->hasRole('vendor')) {
+      return AccessResult::forbidden()->cachePerUser();
     }
     
-    return AccessResult::forbidden()->cachePerPermissions();
+    // Vendor must have permission to view own dashboard
+    return AccessResult::allowedIfHasPermission($account, 'view own vendor dashboard')
+      ->cachePerPermissions()
+      ->cachePerUser();
   }
 }
